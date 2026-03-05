@@ -1,6 +1,6 @@
 {
   "board": {
-    "active_layer": 0,
+    "active_layer": 2,
     "active_layer_preset": "",
     "auto_track_width": false,
     "hidden_netclasses": [
@@ -122,7 +122,8 @@
       "IC_D+",
       "IC_D-",
       "Net-(JP6-B)",
-      "Net-(C20-Pad2)"
+      "Net-(C20-Pad2)",
+      "unconnected-(U1-IO38-Pad31)"
     ],
     "high_contrast_mode": 0,
     "net_color_mode": 1,
