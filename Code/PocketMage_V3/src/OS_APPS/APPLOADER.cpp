@@ -74,6 +74,13 @@ void copyDirRecursive(File src, const String &assetsSrc, const String &assetsDst
         if (!entry) break;
 
         String name = entry.name();
+        
+        // Skip macOS metadata files
+        if (name.startsWith("._")) {
+            entry.close();
+            continue;
+        }
+
         String relative = name.substring(assetsSrc.length());
         String dstFile = assetsDst + relative;
 
@@ -108,8 +115,16 @@ bool copyAssetsFlat(fs::FS &fs, const char *srcDir, const char *dstDir) {
 
   File f;
   while ((f = dir.openNextFile())) {
-    String srcPath = String(srcDir) + "/" + f.name();
-    String dstPath = String(dstDir) + "/" + f.name();
+    String name = String(f.name());
+    
+    // Skip macOS metadata files
+    if (name.startsWith("._")) {
+        f.close();
+        continue;
+    }
+
+    String srcPath = String(srcDir) + "/" + name;
+    String dstPath = String(dstDir) + "/" + name;
 
     if (f.isDirectory()) {
       ensureDir(fs, dstPath.c_str());
@@ -335,6 +350,12 @@ if (tempRoot && tempRoot.isDirectory()) {
     while ((entry = tempRoot.openNextFile())) {
         String name = String(entry.name());
 
+        // Skip macOS metadata files
+        if (name.startsWith("._")) {
+            entry.close();
+            continue;
+        }
+
         // --- Main .bin ---
         if (binPath.length() == 0 && name.endsWith(".bin") && !name.endsWith("_ICON.bin")) {
             binPath = pathJoin(TEMP_DIR, name);
@@ -381,6 +402,13 @@ while (waitMs < 200) {
         File entry;
         while ((entry = tempRoot.openNextFile())) {
             String name = String(entry.name());
+
+            // Skip macOS metadata files
+            if (name.startsWith("._")) {
+                entry.close();
+                continue;
+            }
+
             if (name.endsWith(".bin") && !name.endsWith("_ICON.bin")) {
                 binPath = pathJoin(TEMP_DIR, name);
                 found = true;
@@ -644,95 +672,68 @@ void processKB_APPLOADER() {
     case MENU:
       if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
         char inchar = KB().updateKeypress();
-        // HANDLE INPUTS
-        //No char recieved
-        if (inchar == 0);   
-        //CR Recieved
-        else if (inchar == 13) {                          
-          currentLine.toLowerCase();
-          if (currentLine == "a") {
-            selectedSlot = 1;
-          }
-          else if (currentLine == "b") {
-            selectedSlot = 2;
-          }
-          else if (currentLine == "c") {
-            selectedSlot = 3;
-          }
-          else if (currentLine == "d") {
-            selectedSlot = 4;
-          }
-          CurrentAppLoaderState = SWAP_OR_EDIT;
-          KB().setKeyboardState(NORMAL);
+        
+        if (inchar != 0) {
+            KBBounceMillis = currentMillis;
+        }
 
-          currentLine = "";
-        }                                       
-        //SHIFT Recieved
-        else if (inchar == 17) {
-          if (KB().getKeyboardState() == SHIFT || KB().getKeyboardState() == FN_SHIFT) {
+        // HANDLE INPUTS
+        if (inchar == 0) {
+            // Do nothing
+        }
+        else if (inchar == 12 || inchar == 23) { // Home or App Switcher Kill Signal
+            HOME_INIT();
+        }
+        else if (inchar == 'a' || inchar == 'A' || inchar == '1') {
+            selectedSlot = 1;
+            CurrentAppLoaderState = SWAP_OR_EDIT;
             KB().setKeyboardState(NORMAL);
-          } else if (KB().getKeyboardState() == FUNC) {
-            KB().setKeyboardState(FN_SHIFT);
-          } else {
-            KB().setKeyboardState(SHIFT);
-          }
         }
-        // FN Recieved
-        else if (inchar == 18) {
-          if (KB().getKeyboardState() == FUNC || KB().getKeyboardState() == FN_SHIFT) {
+        else if (inchar == 'b' || inchar == 'B' || inchar == '2') {
+            selectedSlot = 2;
+            CurrentAppLoaderState = SWAP_OR_EDIT;
             KB().setKeyboardState(NORMAL);
-          } else if (KB().getKeyboardState() == SHIFT) {
-            KB().setKeyboardState(FN_SHIFT);
-          } else {
-            KB().setKeyboardState(FUNC);
-          }
         }
-        //Space Recieved
-        else if (inchar == 32) {                                  
-          currentLine += " ";
-        }
-        //ESC / CLEAR Recieved
-        else if (inchar == 20) {                                  
-          currentLine = "";
-        }
-        //BKSP Recieved
-        else if (inchar == 8) {                  
-          if (currentLine.length() > 0) {
-            currentLine.remove(currentLine.length() - 1);
-          }
-        }
-        // Home recieved
-        else if (inchar == 12) {
-          HOME_INIT();
-        }
-        else {
-          currentLine += inchar;
-          if (inchar >= 48 && inchar <= 57) {}  //Only leave FN on if typing numbers
-          else if (KB().getKeyboardState() != NORMAL) {
+        else if (inchar == 'c' || inchar == 'C' || inchar == '3') {
+            selectedSlot = 3;
+            CurrentAppLoaderState = SWAP_OR_EDIT;
             KB().setKeyboardState(NORMAL);
-          }
         }
+        else if (inchar == 'd' || inchar == 'D' || inchar == '4') {
+            selectedSlot = 4;
+            CurrentAppLoaderState = SWAP_OR_EDIT;
+            KB().setKeyboardState(NORMAL);
+        }
+        // All other keys are ignored in the MENU state
 
         currentMillis = millis();
-        //Make sure oled only updates at OLED_MAX_FPS
+        // Make sure oled only updates at OLED_MAX_FPS
         if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
-          OLED().oledLine(currentLine, currentLine.length(), false);
+          OLED().oledWord("Choose slot: (A)(B)(C)(D)");
         }
       }
       break;
+
     case SWAP_OR_EDIT:
       if (currentMillis - KBBounceMillis >= KB_COOLDOWN) {  
         char inchar = KB().updateKeypress();
-        // HANDLE INPUTS
-        //No char recieved
-        if (inchar == 0);   
-        // Swap
+
+        if (inchar != 0) {
+            KBBounceMillis = currentMillis;
+        }
+
+        if (inchar == 0) {
+            // Do nothing
+        }   
+        else if (inchar == 12 || inchar == 23) { // Home or App Switcher Kill Signal
+          selectedSlot = 0;
+          CurrentAppLoaderState = MENU;
+          newState = true; // Trigger e-ink redraw of the menu
+        }
         else if (inchar == 'S' || inchar == 's' || inchar == '!') {
-          // Switch to swap loop
           CurrentAppLoaderState = SWAP;
         }
-        // Delete
         else if (inchar == 'D' || inchar == 'd' || inchar == '$') {
           // Clear the slot
           prefs.begin("PocketMage", false);
@@ -751,38 +752,40 @@ void processKB_APPLOADER() {
             }
           }
 
-          OLED().oledWord("App removed");
+          OLED().sysMessage("App removed", 2000);
 
-          // Return to menu
           newState = true;
           CurrentAppLoaderState = MENU;
-          vTaskDelay(pdMS_TO_TICKS(2000));
         }
         
-        // Home recieved
-        else if (inchar == 12) {
-          selectedSlot = 0;
-          CurrentAppLoaderState = MENU;
-          currentLine = "";
-        }
         currentMillis = millis();
-        //Make sure oled only updates at OLED_MAX_FPS
+        // Make sure oled only updates at OLED_MAX_FPS
         if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
           OLEDFPSMillis = currentMillis;
-          //OLED().oledLine(currentLine, false);
           OLED().oledWord("(S)wap app or (D)elete app");
         }
       }
       break;
+
     case SWAP:
       outPath = fileWizardMini(false, APP_DIRECTORY, 0);
-      if (outPath == "_EXIT_") {
+      
+      // Catch standard exits as well as the App Switcher 23 kill signal string
+      if (outPath == "_EXIT_" || outPath == "_APP_SWITCH_" || outPath == "_RETURN_") {
         // Return to menu
         CurrentAppLoaderState = MENU;
         newState = true;
         break;
       }
       else if (outPath != "") {
+        // Reject MacOS metadata files disguised as tar files
+        if (outPath.indexOf("/._") != -1) {
+            OLED().sysMessage("Cannot install MacOS metadata files!", 2000);
+            CurrentAppLoaderState = MENU;
+            newState = true; // Force background redraw just in case
+            break;
+        }
+
         // Ensure file is a .tar
         if (outPath.endsWith(".tar") || outPath.endsWith(".TAR")) {
           // Strip leading APP_DIRECTORY + '/' so installer gets relative path
@@ -797,11 +800,13 @@ void processKB_APPLOADER() {
           installAppTarToOtaAsync(relName.c_str(), selectedSlot);
           CurrentAppLoaderState = INSTALLING;
         } else {
-          OLED().sysMessage("Not a .tar file!",2000);
+          OLED().sysMessage("Not a .tar file!", 2000);
           CurrentAppLoaderState = MENU;
+          newState = true;
         }
       }
       break;
+
     case INSTALLING:
       // Update OLED progress
       if (!g_installDone) {
@@ -809,10 +814,10 @@ void processKB_APPLOADER() {
       } else {
         vTaskDelay(pdMS_TO_TICKS(500));
         if (g_installFailed) {
-          OLED().sysMessage("Install Failed!",2000);
+          OLED().sysMessage("Install Failed!", 2000);
         } 
         else {
-          OLED().sysMessage("Install Complete!",2000);
+          OLED().sysMessage("Install Complete!", 2000);
         }
         newState = true;
         CurrentAppLoaderState = MENU;
