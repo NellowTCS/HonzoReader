@@ -705,6 +705,13 @@ void processKB_APPLOADER() {
             KB().setKeyboardState(NORMAL);
         }
         // All other keys are ignored in the MENU state
+
+        currentMillis = millis();
+        // Make sure oled only updates at OLED_MAX_FPS
+        if (currentMillis - OLEDFPSMillis >= (1000/OLED_MAX_FPS)) {
+          OLEDFPSMillis = currentMillis;
+          OLED().oledWord("Choose slot: (A)(B)(C)(D)");
+        }
       }
       break;
 
