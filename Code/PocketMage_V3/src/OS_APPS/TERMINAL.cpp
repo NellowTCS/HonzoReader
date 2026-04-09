@@ -269,6 +269,12 @@ void funcSelect(String command) {
     return;
   }
 
+  // Exit terminal
+  else if (command == "exit" || command == "quit" || command == "q") {
+    HOME_INIT();
+    return;
+  }
+
   // Help
   else if (command == "help") {
     terminalOutputs.push_back("Available commands:");
