@@ -228,13 +228,23 @@ void setupSD() {
     global_fs = &SD_MMC;
 
     pocketmage::setCpuSpeed(240);
-    SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0);
+
+    #if POCKETMAGE_HW_VERSION == 2
+      // Production: 4-Wire Mode (Requires D0, D1, D2, D3)
+      SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0, SD_D1, SD_D2, SD_D3);
+      bool mode1bit = false; 
+    #else
+      // Beta: 1-Wire Mode
+      SD_MMC.setPins(SD_CLK, SD_CMD, SD_D0);
+      bool mode1bit = true;
+    #endif
 
     bool sdOK = false;
     bool startedSD = false;
     sdcard_type_t cardType = CARD_NONE;
     for (int attempt = 1; attempt <= 25; attempt++) {
-        if (SD_MMC.begin("/sdcard", true)) {
+        // Pass the mode1bit boolean dynamically
+        if (SD_MMC.begin("/sdcard", mode1bit)) {
             startedSD = true;
             delay(120); 
             cardType = SD_MMC.cardType();

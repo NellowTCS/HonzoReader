@@ -29,7 +29,7 @@ bool noTimeout = false;  // Disable timeout
 bool mscEnabled = false;
 bool sinkEnabled = false;
 volatile bool SDActive = false;
-volatile int battState = 0;  // Bary state
+volatile int battState = 0;  // Battery state
 
 ///////////////////////////////////////////////////////////////////////////////
 //            Use this function in apps to return to PocketMage OS           //
@@ -210,6 +210,8 @@ bool setRebootFlagOTA() {
   ESP_LOGE(TAG, "Running in PocketMage OS, no reboot needed");
   return true;
 }
+
+
 
 // checks if reboot flag is set, clears flag and reboots to PocketMage OS
 void checkRebootOTA() {

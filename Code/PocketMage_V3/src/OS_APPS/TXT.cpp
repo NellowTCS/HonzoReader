@@ -167,13 +167,18 @@ static bool updateScreen = false;
 static ulong currentLineNum = 0;
 static ulong topVisibleLine = 0;
 
-#define MAX_LINES 1000    // Max number of lines in document
-#define LINE_CAP 64       // Max number of bytes in a line
+#if BOARD_HAS_PSRAM
+  #define MAX_LINES 4000
+#else
+  #define MAX_LINES 1000
+#endif
+
+#define LINE_CAP 64       
 
 struct Line {
-  char type = ' ';          // line type
-  char text[LINE_CAP + 1];  // line content (UTF-8 Byte Array)
-  uint16_t len;             // line length in bytes
+  char type = ' ';          
+  char text[LINE_CAP + 1];  
+  uint16_t len;             
 };
 
 struct Document {
@@ -181,12 +186,35 @@ struct Document {
   ulong lineCount;
 };
 
-Document document;
+Document* doc_ptr = nullptr;
+#define document (*doc_ptr)
 
 void initLine(Line& line) {
   line.type = ' ';
   line.len = 0;
   line.text[0] = '\0';
+}
+
+void initDocMemory() {
+  if (doc_ptr == nullptr) {
+    #if BOARD_HAS_PSRAM
+      doc_ptr = (Document*) ps_malloc(sizeof(Document));
+      if (doc_ptr == nullptr) {
+        doc_ptr = (Document*) malloc(sizeof(Document));
+      }
+    #else
+      doc_ptr = (Document*) malloc(sizeof(Document));
+    #endif
+
+    if (doc_ptr != nullptr) {
+      doc_ptr->lineCount = 0;
+      for (int i = 0; i < MAX_LINES; i++) {
+        initLine(doc_ptr->lines[i]);
+      }
+    } else {
+      ESP_LOGE(TAG, "FATAL: Failed to allocate memory for TXT Document!");
+    }
+  }
 }
 
 #pragma region Editor Helpers
@@ -1969,6 +1997,7 @@ void initFonts() {
 }
 
 void TXT_INIT(String inPath) {
+  initDocMemory();
   initFonts();
   setFontStyle(serif);
   bool fileLoaded = loadMarkdownFile(inPath);
@@ -1992,6 +2021,7 @@ void TXT_INIT(String inPath) {
 }
 
 void TXT_INIT_JournalMode() {
+  initDocMemory();
   initFonts();
 
   String outPath = getCurrentJournal();
