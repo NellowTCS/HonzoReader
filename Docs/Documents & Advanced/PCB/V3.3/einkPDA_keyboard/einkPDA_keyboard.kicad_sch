@@ -36532,7 +36532,7 @@
 				(hide yes)
 			)
 		)
-		(property "LCSC Part #" "C2681320"
+		(property "LCSC Part #" "C2680344"
 			(at 157.48 267.97 0)
 			(effects
 				(font
@@ -38985,7 +38985,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "ESP32-S3-WROOM-1"
+		(property "Value" "ESP32-S3-WROOM-1-N16R2"
 			(at 106.3341 21.59 0)
 			(effects
 				(font
