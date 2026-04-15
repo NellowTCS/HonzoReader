@@ -1013,7 +1013,7 @@ void toolBar(Line& line, bool bold, bool italic) {
   String lineTypeLabel;
 
   switch (currentDocLineType) {
-    case ' ': lineTypeLabel = "ERR"; break;
+    case ' ': lineTypeLabel = " "; break;
     case 'T': lineTypeLabel = "BODY"; break;
     case '1': lineTypeLabel = "H1"; break;
     case '2': lineTypeLabel = "H2"; break;
@@ -1154,7 +1154,7 @@ void displayScrollPreviewOLED(Document& doc, ulong activeCursorLine) {
     case 'o': typeLabel = "O LIST"; break;
     case 'H': typeLabel = "H RULE"; break;
     case 'B': typeLabel = "BLANK"; break;
-    case ' ': typeLabel = "ERR"; break;
+    case ' ': typeLabel = " "; break;
     default:  typeLabel = "BODY"; break;
   }
 
