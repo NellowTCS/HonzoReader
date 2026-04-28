@@ -1,6 +1,5 @@
 // AUDIT 1
 #include <globals.h>
-#include <map>
 
 #if !OTA_APP // PocketMage OS Only
 #include "wrench.h"
@@ -57,106 +56,125 @@ static std::vector<String> potionLines;
 static long lastInput = millis();
 
 // Command Links
-static std::map<String, String> potLinks;
+static std::vector<String> potLinkAliases;
+static std::vector<String> potLinkPaths;
 static bool potLinksLoaded = false;
 
 // Functions
 
 void loadPotLinks() {
-  potLinks.clear();
-  if (!global_fs->exists("/sys/pot_links.txt")) return;
+  pocketmage::setCpuSpeed(240);
+  potLinkAliases.clear();
+  potLinkPaths.clear();
+  if (!global_fs->exists("/sys/pot_links.txt")) {
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    return;
+  }
   
   File f = global_fs->open("/sys/pot_links.txt", FILE_READ);
-  if (!f) return;
+  if (!f || f.isDirectory()) {
+    if (f) f.close();
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    return;
+  }
   
   while (f.available()) {
     String line = f.readStringUntil('\n');
     line.trim();
+    if (line.length() == 0) continue;
+    
     int comma = line.indexOf(',');
     if (comma != -1) {
-      String alias = line.substring(0, comma);
-      String path = line.substring(comma + 1);
-      potLinks[alias] = path;
+      potLinkAliases.push_back(line.substring(0, comma));
+      potLinkPaths.push_back(line.substring(comma + 1));
     }
   }
   f.close();
   potLinksLoaded = true;
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 }
 
 void savePotLinks() {
+  pocketmage::setCpuSpeed(240);
   if (!global_fs->exists("/sys")) global_fs->mkdir("/sys");
   File f = global_fs->open("/sys/pot_links.txt", FILE_WRITE);
-  if (!f) return;
+  if (!f) {
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    return;
+  }
   
-  for (auto const& x : potLinks) {
-    f.println(x.first + "," + x.second);
+  for (size_t i = 0; i < potLinkAliases.size(); i++) {
+    f.println(potLinkAliases[i] + "," + potLinkPaths[i]);
   }
   f.close();
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 }
 
 #pragma region POTION
-void potionScrollPreview() {
+void terminalScrollPreview() {
   u8g2.clearBuffer();
+  u8g2.setDrawColor(1);
 
-  if (currentPotionLine < 2) {
-    int y = 8;
-    for (int i = 0; i < potionLines.size(); i++) {
-      // Skip out of bounds lines
-      if (i < 0 || i > (potionLines.size() - 1)) {
-        continue;
-      }
+  int startLine = 0;
+  if (termScrollIndex >= 1) {
+    startLine = termScrollIndex - 1;
+  }
 
-      // Draw each line
-      String lineNum = String(i);
-      while (lineNum.length() < 3) {
-        lineNum = "0" + lineNum;
-      }
-      lineNum = "[" + lineNum + "]";
-
-      if (i == currentPotionLine) {
-        u8g2.setDrawColor(1);
-        u8g2.drawBox(0, y - 8, u8g2.getDisplayWidth(), 9);
-        u8g2.setDrawColor(0);
-      } else
-        u8g2.setDrawColor(1);
-
-      u8g2.setFont(u8g2_font_5x7_tf);
-      u8g2.drawUTF8(0, y, lineNum.c_str());
-      u8g2.drawUTF8(35, y, potionLines[i].c_str());
-
-      y += 8;
+  int y = 7; 
+  for (int i = startLine; i < startLine + 4; i++) {
+    if (i >= (int)terminalOutputs.size()) {
+      break;
     }
-  } else {
-    int y = 8;
-    for (int i = (currentPotionLine - 2); i <= (currentPotionLine + 1); i++) {
-      // Skip out of bounds lines
-      if (i >= potionLines.size() || y > (u8g2.getDisplayHeight() + 10)) {
-        continue;
-      }
-      // Draw each line
-      String lineNum = String(i);
-      while (lineNum.length() < 3) {
-        lineNum = "0" + lineNum;
-      }
-      lineNum = "[" + lineNum + "]";
 
-      if (i == currentPotionLine) {
-        u8g2.setDrawColor(1);
-        u8g2.drawBox(0, y - 8, u8g2.getDisplayWidth(), 9);
-        u8g2.setDrawColor(0);
-      } else
-        u8g2.setDrawColor(1);
-
-      u8g2.setFont(u8g2_font_5x7_tf);
-      u8g2.drawUTF8(0, y, lineNum.c_str());
-      u8g2.drawUTF8(35, y, potionLines[i].c_str());
-
-      y += 8;
+    if (i == (int)termScrollIndex) {
+      u8g2.drawTriangle(0, y - 6, 0, y, 4, y - 3);
     }
+
+    u8g2.setFont(u8g2_font_5x7_tf);
+    u8g2.drawUTF8(6, y, terminalOutputs[i].c_str());
+
+    y += 8;
   }
 
   u8g2.sendBuffer();
+}
+
+void potionScrollPreview() {
+  u8g2.clearBuffer();
   u8g2.setDrawColor(1);
+
+  // Calculate sliding window to keep cursor vertically centered
+  int startLine = 0;
+  if (currentPotionLine >= 1) {
+    startLine = currentPotionLine - 1;
+  }
+
+  int y = 7; // Baseline for the first row of text
+  
+  for (int i = startLine; i < startLine + 4; i++) {
+    if (i >= (int)potionLines.size()) {
+      break;
+    }
+
+    String lineNum = String(i);
+    while (lineNum.length() < 3) {
+      lineNum = "0" + lineNum;
+    }
+    lineNum = "[" + lineNum + "]";
+
+    if (i == currentPotionLine) {
+      // Draw left-aligned right-pointing triangle
+      u8g2.drawTriangle(0, y - 6, 0, y, 4, y - 3);
+    }
+
+    u8g2.setFont(u8g2_font_5x7_tf);
+    u8g2.drawUTF8(6, y, lineNum.c_str());
+    u8g2.drawUTF8(30, y, potionLines[i].c_str());
+
+    y += 8;
+  }
+
+  u8g2.sendBuffer();
 }
 
 void loadPotionFile(String path) {
@@ -165,6 +183,8 @@ void loadPotionFile(String path) {
 
   File file = global_fs->open(path);
   if (!file || file.isDirectory()) {
+    if (file) file.close();
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     return;
   }
 
@@ -173,7 +193,6 @@ void loadPotionFile(String path) {
     char c = file.read();
 
     if (c == '\n') {
-      // Strip optional '\r'
       if (line.endsWith("\r")) {
         line.remove(line.length() - 1);
       }
@@ -184,7 +203,6 @@ void loadPotionFile(String path) {
     }
   }
 
-  // Handle last line if file doesn't end with '\n'
   if (line.length() > 0) {
     if (line.endsWith("\r")) {
       line.remove(line.length() - 1);
@@ -194,11 +212,10 @@ void loadPotionFile(String path) {
 
   file.close();
 
-  // If document is blank, open a line
   if (potionLines.size() == 0)
     potionLines.push_back("");
 
-  pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 }
 
 void savePotionFile(String path) {
@@ -206,6 +223,7 @@ void savePotionFile(String path) {
 
   File file = global_fs->open(path, FILE_WRITE);
   if (!file) {
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     return;
   }
 
@@ -217,7 +235,7 @@ void savePotionFile(String path) {
   }
 
   file.close();
-  pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
   OLED().sysMessage("FILE SAVED",500);
 }
 
@@ -237,15 +255,17 @@ void updateTerminalDisp() {
   newState = false;
   display.fillRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
 
-  int maxScroll = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+  int maxScroll = 0;
+  if (terminalOutputs.size() > 14) {
+    maxScroll = (int)(terminalOutputs.size() - 14);
+  }
   
-  // Safely clamp bounds (Removed the < 0 check)
   if (termScrollIndex > (ulong)maxScroll) termScrollIndex = maxScroll;
 
   int y = 14;
-  int startIdx = termScrollIndex;
+  int startIdx = (int)termScrollIndex;
   int endIdx = startIdx + 14;
-  if (endIdx > terminalOutputs.size()) endIdx = terminalOutputs.size();
+  if (endIdx > (int)terminalOutputs.size()) endIdx = (int)terminalOutputs.size();
 
   for (int i = startIdx; i < endIdx; i++) {
     const String& s = terminalOutputs[i];
@@ -261,17 +281,14 @@ void updateTerminalDisp() {
     int barWidth = 4;
     int barX = display.width() - barWidth;
     
-    // Draw Track Line
     display.drawFastVLine(barX + (barWidth / 2), 0, display.height(), GxEPD_WHITE);
     
-    // Calculate Handle Height and Position
     float visibleRatio = 14.0 / terminalOutputs.size();
     int handleHeight = max((int)(display.height() * visibleRatio), 15);
     
     float scrollFraction = (float)termScrollIndex / maxScroll;
     int handleY = scrollFraction * (display.height() - handleHeight);
     
-    // Draw Handle Block
     display.fillRect(barX, handleY, barWidth, handleHeight, GxEPD_WHITE);
   }
 
@@ -310,10 +327,9 @@ bool deleteRecursive(String path) {
 void funcSelect(String command) {
   String returnText = "";
 
-  // Add inputted command to terminal outputs
   String totalMsg = currentDir + ">" + command;
   if (totalMsg.length() > 28)
-    totalMsg = totalMsg.substring(0, 28); // Standard substring is OK for simple paths
+    totalMsg = totalMsg.substring(0, 28);
   terminalOutputs.push_back(totalMsg);
 
   command.toLowerCase();
@@ -336,46 +352,43 @@ void funcSelect(String command) {
   else if (command == "help") {
     terminalOutputs.push_back("Available commands:");
     terminalOutputs.push_back("ls                 List dir");
-    terminalOutputs.push_back("cd <dir>           Change dir");
-    terminalOutputs.push_back("rm <file>         Remove file");
-    terminalOutputs.push_back("rm -r <dir>        Remove dir");
-    terminalOutputs.push_back("cp <src> <dest>    Copy file");
-    terminalOutputs.push_back("mv <src> <dest>  Move/rename");
-    terminalOutputs.push_back("touch <file>      Create file");
-    terminalOutputs.push_back("clear          Clear terminal");
-    terminalOutputs.push_back("txt <file>        Open in TXT");
-    terminalOutputs.push_back("potion/pot <file>   Edit prgm");
-    terminalOutputs.push_back("brew <file>          Run prgm");
+    terminalOutputs.push_back("cd <dir>         Change dir");
+    terminalOutputs.push_back("rm <file>       Remove file");
+    terminalOutputs.push_back("rm -r <dir>      Remove dir");
+    terminalOutputs.push_back("cp <src> <dest>   Copy file");
+    terminalOutputs.push_back("mv <src> <dest>   Mv/rename");
+    terminalOutputs.push_back("touch <file>    Create file");
+    terminalOutputs.push_back("clear        Clear terminal");
+    terminalOutputs.push_back("txt <file>      Open in TXT");
+    terminalOutputs.push_back("potion/pot <file> Edit prgm");
+    terminalOutputs.push_back("brew <file>        Run prgm");
     terminalOutputs.push_back("pot link <file> <alias>");
     terminalOutputs.push_back("pot unlink <alias>");
 
     termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
     newState = true;
     return;
+
   }
 
   // Enter directory
   else if (command.startsWith("cd")) {
     pocketmage::setCpuSpeed(240);
-    // Remove "cd " prefix and trim whitespace
     String arg = command.substring(2);
     arg.trim();
     if (arg.length() == 0) {
       currentDir = "/";  // 'cd' alone returns to root
     } else {
       String newPath = arg;
-      // Handle relative paths
       if (!newPath.startsWith("/")) {
         if (!currentDir.endsWith("/"))
           currentDir += "/";
         newPath = currentDir + newPath;
       }
-      // Remove trailing '/' unless root
       if (newPath.length() > 1 && newPath.endsWith("/")) {
         newPath.remove(newPath.length() - 1);
       }
 
-      // Check if directory exists
       if (global_fs->exists(newPath)) {
         File f = global_fs->open(newPath);
         if (f && f.isDirectory()) {
@@ -383,13 +396,13 @@ void funcSelect(String command) {
         } else {
           returnText = "cd: Not a directory";
         }
-        f.close();
+        if (f) f.close();
       } else {
         returnText = "cd: No such directory";
       }
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
@@ -444,7 +457,7 @@ void funcSelect(String command) {
     } else {
       returnText = "ls: No such directory";
     }
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
@@ -458,7 +471,6 @@ void funcSelect(String command) {
   else if (command.startsWith("mkdir")) {
     pocketmage::setCpuSpeed(240);
 
-    // Format the path
     String arg = command.substring(5);
     arg.trim();
     String newDirPath = currentDir;
@@ -474,12 +486,11 @@ void funcSelect(String command) {
       returnText = "Path not defined";
     }
 
-    // Create the directory
     if (!global_fs->exists(newDirPath))
       global_fs->mkdir(newDirPath);
     currentDir = newDirPath;
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
@@ -516,7 +527,7 @@ void funcSelect(String command) {
       returnText = "Path not found";
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
@@ -554,17 +565,16 @@ void funcSelect(String command) {
       } else if (f.isDirectory()) {
         returnText = "Not a file - use <rm -r>";
       } else {
-        f.close();  // REQUIRED
+        f.close();
         if (!global_fs->remove(dirPath))
           returnText = "Delete failed";
       }
-      if (f)
-        f.close();
+      if (f) f.close();
     } else if (returnText == "") {
       returnText = "Path not found";
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
@@ -590,10 +600,8 @@ void funcSelect(String command) {
       src.trim();
       dest.trim();
 
-      String srcPath =
-          src.startsWith("/") ? src : (currentDir + (currentDir.endsWith("/") ? "" : "/") + src);
-      String destPath =
-          dest.startsWith("/") ? dest : (currentDir + (currentDir.endsWith("/") ? "" : "/") + dest);
+      String srcPath = src.startsWith("/") ? src : (currentDir + (currentDir.endsWith("/") ? "" : "/") + src);
+      String destPath = dest.startsWith("/") ? dest : (currentDir + (currentDir.endsWith("/") ? "" : "/") + dest);
 
       if (!global_fs->exists(srcPath)) {
         returnText = "Source not found";
@@ -618,7 +626,7 @@ void funcSelect(String command) {
       }
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
@@ -644,17 +652,13 @@ void funcSelect(String command) {
       src.trim();
       dest.trim();
 
-      String srcPath =
-          src.startsWith("/") ? src : (currentDir + (currentDir.endsWith("/") ? "" : "/") + src);
-      String destPath =
-          dest.startsWith("/") ? dest : (currentDir + (currentDir.endsWith("/") ? "" : "/") + dest);
+      String srcPath = src.startsWith("/") ? src : (currentDir + (currentDir.endsWith("/") ? "" : "/") + src);
+      String destPath = dest.startsWith("/") ? dest : (currentDir + (currentDir.endsWith("/") ? "" : "/") + dest);
 
       if (!global_fs->exists(srcPath)) {
         returnText = "Source not found";
       } else {
-        // Try fast rename first
         if (!global_fs->rename(srcPath, destPath)) {
-          // Fallback: copy + delete
           File srcFile = global_fs->open(srcPath, FILE_READ);
           if (!srcFile || srcFile.isDirectory()) {
             returnText = "Source is not a file";
@@ -677,7 +681,7 @@ void funcSelect(String command) {
       }
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
@@ -697,16 +701,14 @@ void funcSelect(String command) {
     if (arg.length() == 0) {
       returnText = "Usage: touch <file>";
     } else {
-      String filePath =
-          arg.startsWith("/") ? arg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + arg);
+      String filePath = arg.startsWith("/") ? arg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + arg);
 
       if (global_fs->exists(filePath)) {
         File f = global_fs->open(filePath);
         if (f && f.isDirectory()) {
           returnText = "Is a directory";
         }
-        if (f)
-          f.close();
+        if (f) f.close();
       } else {
         File f = global_fs->open(filePath, FILE_WRITE);
         if (!f) {
@@ -717,7 +719,7 @@ void funcSelect(String command) {
       }
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
@@ -731,13 +733,12 @@ void funcSelect(String command) {
   else if (command.startsWith("txt ")) {
     pocketmage::setCpuSpeed(240);
 
-    String arg = command.substring(4);  // everything after "txt "
+    String arg = command.substring(4);
     arg.trim();
 
     if (arg.length() == 0) {
       returnText = "Usage: txt <filename>";
     } else {
-      // Ensure .txt extension or add it
       if (!arg.endsWith(".txt")) {
         int dotIdx = arg.lastIndexOf('.');
         if (dotIdx != -1) {
@@ -748,18 +749,14 @@ void funcSelect(String command) {
       }
 
       if (returnText == "") {
-        // Compute full path
-        String filePath =
-            arg.startsWith("/") ? arg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + arg);
+        String filePath = arg.startsWith("/") ? arg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + arg);
 
-        // Verify that file exists
         if (!global_fs->exists(filePath)) {
           returnText = "File not found";
         } else {
-          // Open in TXT
           PM_SDAUTO().setEditingFile(filePath);
           OLED().oledWord("Opening: " + PM_SDAUTO().getEditingFile());
-          pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+          if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
           delay(1000);
           TXT_INIT(filePath);
           return;
@@ -767,7 +764,7 @@ void funcSelect(String command) {
       }
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
@@ -794,10 +791,8 @@ void funcSelect(String command) {
       fileArg.trim();
       aliasArg.trim();
 
-      // Compute full path for file
       String filePath = fileArg.startsWith("/") ? fileArg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + fileArg);
       
-      // Ensure .c extension if none provided
       if (!filePath.endsWith(".c")) {
         int dotIdx = fileArg.lastIndexOf('.');
         if (dotIdx == -1) filePath += ".c";
@@ -806,13 +801,24 @@ void funcSelect(String command) {
       if (!global_fs->exists(filePath)) {
         returnText = "File not found";
       } else {
-        potLinks[aliasArg] = filePath;
+        // Find existing or add new
+        int existingIdx = -1;
+        for(size_t i=0; i<potLinkAliases.size(); i++){
+            if(potLinkAliases[i] == aliasArg){ existingIdx = i; break; }
+        }
+        if(existingIdx != -1){
+            potLinkPaths[existingIdx] = filePath;
+        } else {
+            potLinkAliases.push_back(aliasArg);
+            potLinkPaths.push_back(filePath);
+        }
+        
         savePotLinks();
         returnText = "Linked " + aliasArg + " -> " + fileArg;
       }
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText, 1000);
@@ -829,15 +835,21 @@ void funcSelect(String command) {
     String aliasArg = command.substring(11);
     aliasArg.trim();
 
-    if (potLinks.count(aliasArg)) {
-      potLinks.erase(aliasArg);
+    int linkIdx = -1;
+    for(size_t i=0; i<potLinkAliases.size(); i++){
+        if(potLinkAliases[i] == aliasArg){ linkIdx = i; break; }
+    }
+
+    if (linkIdx != -1) {
+      potLinkAliases.erase(potLinkAliases.begin() + linkIdx);
+      potLinkPaths.erase(potLinkPaths.begin() + linkIdx);
       savePotLinks();
       returnText = "Unlinked " + aliasArg;
     } else {
       returnText = "Link not found";
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText, 1000);
@@ -861,44 +873,37 @@ void funcSelect(String command) {
     if (arg.length() == 0) {
       returnText = "Usage: potion <filename>";
     } else {
-      // Compute full path first
-      String filePath =
-          arg.startsWith("/") ? arg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + arg);
+      String filePath = arg.startsWith("/") ? arg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + arg);
 
-      // Ensure .c or .txt extension
       if (!filePath.endsWith(".c") && !filePath.endsWith(".txt")) {
-        // Check if there's an extension at all in the argument provided
         int dotIdx = arg.lastIndexOf('.');
         if (dotIdx != -1) {
           returnText = "Only .c and .txt files supported";
         } else {
-          // No extension given. Auto-detect based on what exists.
           bool hasC = global_fs->exists(filePath + ".c");
           bool hasTxt = global_fs->exists(filePath + ".txt");
 
           if (hasTxt && !hasC) {
             filePath += ".txt";
           } else {
-            filePath += ".c"; // Default to .c fallback
+            filePath += ".c"; 
           }
         }
       }
 
       if (returnText == "") {
-        // Verify that file exists
         if (!global_fs->exists(filePath)) {
           returnText = "File not found";
         } else {
-          // Open in Potion
           editFile = filePath;
-          pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+          if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
           potionInit();
           return;
         }
       }
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
@@ -912,37 +917,28 @@ void funcSelect(String command) {
   // Compile program
   else if (command.startsWith("brew")) {
     pocketmage::setCpuSpeed(240);
-
     String arg = command.substring(4);
-
     arg.trim();
 
     if (arg.length() == 0) {
       returnText = "Usage: brew <filename>";
     } else {
-      // Ensure .c extension or add it
       if (!arg.endsWith(".c")) {
-        // Check if there's an extension at all
         int dotIdx = arg.lastIndexOf('.');
         if (dotIdx != -1) {
           returnText = "Only .c files supported";
         } else {
-          // Append .c automatically
           arg += ".c";
         }
       }
 
       if (returnText == "") {
-        // Compute full path
-        String filePath =
-            arg.startsWith("/") ? arg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + arg);
+        String filePath = arg.startsWith("/") ? arg : (currentDir + (currentDir.endsWith("/") ? "" : "/") + arg);
 
-        // Verify that file exists
         if (!global_fs->exists(filePath)) {
           returnText = "File not found";
         } 
         else {
-          // Compile and run with Wrench
           const char* wrenchCode = readCFile(filePath);
           if (wrenchCode) {
             compileWrench(wrenchCode);
@@ -951,14 +947,14 @@ void funcSelect(String command) {
             returnText = "Failed to read or empty file";
           }
 
-          pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+          if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
           termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
           return;
         }
       }
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
@@ -970,9 +966,14 @@ void funcSelect(String command) {
   }
 
   // Check whether command is a linked alias
-  if (potLinks.count(command)) {
+  int resolvedLinkIdx = -1;
+  for(size_t i=0; i<potLinkAliases.size(); i++){
+      if(potLinkAliases[i] == command){ resolvedLinkIdx = i; break; }
+  }
+  
+  if (resolvedLinkIdx != -1) {
     pocketmage::setCpuSpeed(240);
-    String filePath = potLinks[command];
+    String filePath = potLinkPaths[resolvedLinkIdx];
 
     if (!global_fs->exists(filePath)) {
       returnText = "Linked file missing";
@@ -984,12 +985,12 @@ void funcSelect(String command) {
       } else {
         returnText = "Failed to read linked file";
       }
-      pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+      if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
       termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
       return;
     }
 
-    pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     if (returnText != "") {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText, 1000);
@@ -1288,18 +1289,22 @@ void wr_getDate(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void*
 
 // ----- Filesystem ----- //
 void wr_readFile(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* usr) {
+  pocketmage::setCpuSpeed(240);
   char path[256];
   argv[0].asString(path, 256);
   String content = PM_SDAUTO().readFileToString(*global_fs, path);
   wr_makeString(c, &ret, content.c_str());
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 }
 
 void wr_writeFile(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* usr) {
+  pocketmage::setCpuSpeed(240);
   char path[256];
   char content[1024];
   argv[0].asString(path, 256);
   argv[1].asString(content, 1024);
   PM_SDAUTO().writeFile(*global_fs, path, content);
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 }
 
 // ----- Helpers ----- //
@@ -1328,6 +1333,7 @@ void wr_random(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* 
 const char* readCFile(const String& path) {
   File f = global_fs->open(path);
   if (!f || f.isDirectory()) {
+    if(f) f.close();
     return nullptr;
   }
 
@@ -1435,7 +1441,13 @@ void TERMINAL_INIT() {
   potionLines.clear();
   potionLines.push_back("");
   terminalCommand = "";
-  termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+  
+  if (terminalOutputs.size() > 14) {
+      termScrollIndex = (ulong)(terminalOutputs.size() - 14);
+  } else {
+      termScrollIndex = 0;
+  }
+  
   KB().setKeyboardState(NORMAL);
   if (!potLinksLoaded) loadPotLinks();
   newState = true;
@@ -1455,12 +1467,18 @@ void processKB_TERMINAL() {
     {
       pocketmage::setCpuSpeed(240);
       char inchar = KB().updateKeypress();
-      if (inchar == 0) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+      if (inchar == 0) {
+        if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+      }
 
-      int maxScroll = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+      int maxScroll = 0;
+      if (terminalOutputs.size() > 14) {
+          maxScroll = (int)(terminalOutputs.size() - 14);
+      }
 
+      ulong maxS = (ulong)maxScroll;
       // Handle Terminal Hardware Scrolling
-      if (TOUCH().updateScroll(maxScroll, termScrollIndex)) {
+      if (TOUCH().updateScroll(maxS, termScrollIndex)) {
         newState = true;
       }
 
@@ -1470,7 +1488,7 @@ void processKB_TERMINAL() {
           KBBounceMillis = currentMillis;
 
           // Make typing jump to the newest line
-          if (termScrollIndex != maxScroll) {
+          if (termScrollIndex != (ulong)maxScroll) {
             termScrollIndex = maxScroll;
             newState = true;
           }
@@ -1478,7 +1496,13 @@ void processKB_TERMINAL() {
           if (inchar == 13) { // CR
             funcSelect(terminalCommand);
             terminalCommand = "";
-            termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+            
+            if (terminalOutputs.size() > 14) {
+                termScrollIndex = (ulong)(terminalOutputs.size() - 14);
+            } else {
+                termScrollIndex = 0;
+            }
+            
             KB().setKeyboardState(NORMAL);
             newState = true;
           }
@@ -1512,7 +1536,12 @@ void processKB_TERMINAL() {
       currentMillis = millis();
       if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
         OLEDFPSMillis = currentMillis;
-        OLED().oledLine(terminalCommand, terminalCommand.length(), false, currentDir + "> ");
+        
+        if (TOUCH().getLastTouch() == -1) {
+          OLED().oledLine(terminalCommand, terminalCommand.length(), false, currentDir + "> ");
+        } else {
+          terminalScrollPreview();
+        }
       }
       break;
     }
@@ -1524,7 +1553,9 @@ void processKB_TERMINAL() {
       // 1. Drain the hardware buffer continuously at loop speed
       pocketmage::setCpuSpeed(240);
       char inchar = KB().updateKeypress();
-      if (inchar == 0) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+      if (inchar == 0) {
+        if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+      }
 
       // update scroll (Independent of keyboard debounce)
       if (TOUCH().updateScroll(potionLines.size() - 1, currentPotionLine)) {
@@ -1705,7 +1736,7 @@ void processKB_TERMINAL() {
       if (currentMillis - OLEDFPSMillis >= (1000 / OLED_MAX_FPS)) {
         OLEDFPSMillis = currentMillis;
         
-        if (CurrentTERMfunc == POTION) { // Verify we didn't just exit back to PROMPT
+        if (CurrentTERMfunc == POTION) { // Verify we didnt just exit back to PROMPT
           if (TOUCH().getLastTouch() == -1) {
             String lineNum = String(currentPotionLine);
             while (lineNum.length() < 3) {
@@ -1728,7 +1759,7 @@ void processKB_TERMINAL() {
 
       break;
   }
-  pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+  if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
 }
 
 void einkHandler_TERMINAL() {
