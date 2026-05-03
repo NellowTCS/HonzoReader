@@ -153,7 +153,12 @@ void deepSleep(bool alternateScreenSaver) {
       pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
     SDActive = false;
 
-    EINK().multiPassRefresh(2);
+    #if POCKETMAGE_HW_VERSION == 2
+      EINK().forceSlowFullUpdate(true);
+      EINK().refresh();
+    #else
+      EINK().multiPassRefresh(2);
+    #endif
   } else {
     // Display alternate screensaver
     EINK().forceSlowFullUpdate(true);

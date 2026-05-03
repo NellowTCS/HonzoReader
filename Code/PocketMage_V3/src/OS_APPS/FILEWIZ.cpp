@@ -30,7 +30,9 @@ void FILEWIZ_INIT() {
   CurrentAppState = FILEWIZ;
   CurrentFileWizState = WIZ0_;
   KB().setKeyboardState(NORMAL);
-  EINK().forceSlowFullUpdate(true);
+  #if POCKETMAGE_HW_VERSION != 2
+    EINK().forceSlowFullUpdate(true);
+  #endif
   newState = true;
 }
 

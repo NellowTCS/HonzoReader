@@ -2045,7 +2045,9 @@ void einkHandler_TXT_NEW() {
     display.setFullWindow();
     display.setTextColor(GxEPD_BLACK);
     editorEinkDisplay(document, currentLineNum);
-    EINK().forceSlowFullUpdate(true);
+    #if POCKETMAGE_HW_VERSION != 2
+      EINK().forceSlowFullUpdate(true);
+    #endif
     EINK().refresh();
   }
 }

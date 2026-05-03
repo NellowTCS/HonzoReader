@@ -50,6 +50,7 @@ static String terminalCommand = "";
 static ulong termScrollIndex = 0;
 static bool termLargeFont = true;
 static int termLinesPerPage = 14;
+static bool termDarkTheme = true;
 
 // Potion
 static String editFile = "";
@@ -255,7 +256,10 @@ void potionInit() {
 #pragma region TERMINAL
 void updateTerminalDisp() {
   newState = false;
-  display.fillRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
+  uint16_t bgColor = termDarkTheme ? GxEPD_BLACK : GxEPD_WHITE;
+  uint16_t fgColor = termDarkTheme ? GxEPD_WHITE : GxEPD_BLACK;
+
+  display.fillRect(0, 0, display.width(), display.height(), bgColor);
 
   int maxScroll = 0;
   if (terminalOutputs.size() > termLinesPerPage) {
@@ -272,7 +276,7 @@ void updateTerminalDisp() {
 
   for (int i = startIdx; i < endIdx; i++) {
     const String& s = terminalOutputs[i];
-    display.setTextColor(GxEPD_WHITE);
+    display.setTextColor(fgColor);
     if (termLargeFont) display.setFont(&FreeMonoBold9pt7b);
     else display.setFont(&Font5x7Fixed);
     display.setCursor(5, y);
@@ -285,19 +289,17 @@ void updateTerminalDisp() {
     int barWidth = 3;
     int barX = display.width() - barWidth - 1;
     
-    //display.drawFastVLine(barX + (barWidth / 2), 0, display.height(), GxEPD_WHITE);
-    
     float visibleRatio = (float)termLinesPerPage / terminalOutputs.size();
     int handleHeight = max((int)(display.height() * visibleRatio), 15);
     
     float scrollFraction = (float)termScrollIndex / maxScroll;
     int handleY = scrollFraction * (display.height() - handleHeight);
     
-    display.fillRect(barX, handleY, barWidth, handleHeight, GxEPD_WHITE);
+    display.fillRect(barX, handleY, barWidth, handleHeight, fgColor);
 
     // Ensure bar never visually touches top/bottom edges
-    display.drawFastHLine(barX, display.height()-1,barWidth, GxEPD_BLACK);
-    display.drawFastHLine(barX, 0,barWidth, GxEPD_BLACK);
+    display.drawFastHLine(barX, display.height()-1,barWidth, bgColor);
+    display.drawFastHLine(barX, 0,barWidth, bgColor);
   }
 
   display.setTextColor(GxEPD_BLACK);
@@ -374,6 +376,7 @@ void funcSelect(String command) {
     terminalOutputs.push_back("pot link <file> <alias> link");
     terminalOutputs.push_back("pot unlink <alias>    unlink");
     terminalOutputs.push_back("setfont <l/s>  Set font size");
+    terminalOutputs.push_back("theme <light/dark> Set theme");
 
     termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
@@ -990,6 +993,31 @@ void funcSelect(String command) {
       returnText = "Font set to Small";
     } else {
       returnText = "Usage: setfont <l/s>";
+    }
+
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (returnText != "") {
+      terminalOutputs.push_back(returnText);
+      OLED().sysMessage(returnText, 1000);
+    }
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
+    newState = true;
+    return;
+  }
+
+  // Theme
+  else if (command.startsWith("theme ")) {
+    pocketmage::setCpuSpeed(240);
+    String arg = command.substring(6);
+    arg.trim();
+    if (arg == "light" || arg == "l") {
+      termDarkTheme = false;
+      returnText = "Theme set to Light";
+    } else if (arg == "dark" || arg == "d") {
+      termDarkTheme = true;
+      returnText = "Theme set to Dark";
+    } else {
+      returnText = "Usage: theme <light/dark>";
     }
 
     if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
@@ -1809,7 +1837,9 @@ void einkHandler_TERMINAL() {
     case POTION:
       if (newState) {
         newState = false;
-        display.fillRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
+        uint16_t bgColor = termDarkTheme ? GxEPD_BLACK : GxEPD_WHITE;
+        uint16_t fgColor = termDarkTheme ? GxEPD_WHITE : GxEPD_BLACK;
+        display.fillRect(0, 0, display.width(), display.height(), bgColor);
 
         if (potionLines.size() < 24) {
           int y = 10;
@@ -1822,10 +1852,10 @@ void einkHandler_TERMINAL() {
             }
 
             if (i == currentPotionLine) {
-              display.fillRect(0, y - 9, display.width(), 11, GxEPD_WHITE);
-              display.setTextColor(GxEPD_BLACK);
+              display.fillRect(0, y - 9, display.width(), 11, fgColor);
+              display.setTextColor(bgColor);
             } else
-              display.setTextColor(GxEPD_WHITE);
+              display.setTextColor(fgColor);
             display.setFont(&Font5x7Fixed);
             display.setCursor(5, y);
             display.print("[" + lineNum + "]");
@@ -1848,10 +1878,10 @@ void einkHandler_TERMINAL() {
               }
 
               if (i == currentPotionLine) {
-                display.fillRect(0, y - 9, display.width(), 11, GxEPD_WHITE);
-                display.setTextColor(GxEPD_BLACK);
+                display.fillRect(0, y - 9, display.width(), 11, fgColor);
+                display.setTextColor(bgColor);
               } else
-                display.setTextColor(GxEPD_WHITE);
+                display.setTextColor(fgColor);
               display.setFont(&Font5x7Fixed);
               display.setCursor(5, y);
               display.print("[" + lineNum + "]");
@@ -1873,10 +1903,10 @@ void einkHandler_TERMINAL() {
               }
 
               if (i == currentPotionLine) {
-                display.fillRect(0, y - 9, display.width(), 11, GxEPD_WHITE);
-                display.setTextColor(GxEPD_BLACK);
+                display.fillRect(0, y - 9, display.width(), 11, fgColor);
+                display.setTextColor(bgColor);
               } else
-                display.setTextColor(GxEPD_WHITE);
+                display.setTextColor(fgColor);
               display.setFont(&Font5x7Fixed);
               display.setCursor(5, y);
               display.print("[" + lineNum + "]");

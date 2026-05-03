@@ -11,7 +11,9 @@ String bufferEditingFile = PM_SDAUTO().getEditingFile();
 void JOURNAL_INIT() {
   CurrentAppState = JOURNAL;
   CurrentJournalState = J_MENU;
-  EINK().forceSlowFullUpdate(true);
+  #if POCKETMAGE_HW_VERSION != 2
+    EINK().forceSlowFullUpdate(true);
+  #endif
   newState = true;
   KB().setKeyboardState(NORMAL);
   bufferEditingFile = PM_SDAUTO().getEditingFile();

@@ -30,7 +30,9 @@ void TASKS_INIT() {
   updateTaskArray();
   sortTasksByDueDate(tasks);
   
-  EINK().forceSlowFullUpdate(true);
+  #if POCKETMAGE_HW_VERSION != 2
+    EINK().forceSlowFullUpdate(true);
+  #endif
   newState = true;
 }
 
@@ -269,7 +271,9 @@ void processKB_TASKS() {
         
           if (inchar == 127 || inchar == 8 || inchar == 12) {
             CurrentTasksState = TASKS0;
-            EINK().forceSlowFullUpdate(true);
+            #if POCKETMAGE_HW_VERSION != 2
+              EINK().forceSlowFullUpdate(true);
+            #endif
             newState = true;
             break;
           }
@@ -286,7 +290,9 @@ void processKB_TASKS() {
                     updateTasksFile();
 
                     CurrentTasksState = TASKS0;
-                    EINK().forceSlowFullUpdate(true);
+                    #if POCKETMAGE_HW_VERSION != 2
+                      EINK().forceSlowFullUpdate(true);
+                    #endif
                     newState = true;
                   }
                 }
@@ -306,7 +312,9 @@ void processKB_TASKS() {
 
                     // RETURN
                     CurrentTasksState = TASKS0;
-                    EINK().forceSlowFullUpdate(true);
+                    #if POCKETMAGE_HW_VERSION != 2
+                      EINK().forceSlowFullUpdate(true);
+                    #endif
                     newState = true;
                   }
                 }
@@ -318,7 +326,9 @@ void processKB_TASKS() {
                     updateTasksFile();
 
                     CurrentTasksState = TASKS0;
-                    EINK().forceSlowFullUpdate(true);
+                    #if POCKETMAGE_HW_VERSION != 2
+                      EINK().forceSlowFullUpdate(true);
+                    #endif
                     newState = true;
                   }
                 }
@@ -327,7 +337,9 @@ void processKB_TASKS() {
                   addTask(tasks[selectedTask][0]+"_COPY", tasks[selectedTask][1], "0", "0");
 
                   CurrentTasksState = TASKS0;
-                  EINK().forceSlowFullUpdate(true);
+                  #if POCKETMAGE_HW_VERSION != 2
+                    EINK().forceSlowFullUpdate(true);
+                  #endif
                   newState = true;
                 }
             }
