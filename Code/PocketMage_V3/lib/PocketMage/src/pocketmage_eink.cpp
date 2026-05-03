@@ -27,7 +27,7 @@ PocketmageEink& EINK() { return pm_eink; }
 void PocketmageEink::refresh() {
   // Use a slow full update for every N fast refreshes
   // Forced full refreshes are only needed in the Beta
-  if ((partialCounter_ >= fullRefreshAfter_) || (forceSlowFullUpdate_ && POCKETMAGE_HW_VERSION != 2)) {
+  if ((partialCounter_ >= fullRefreshAfter_) || (forceSlowFullUpdate_/* && POCKETMAGE_HW_VERSION != 2*/)) {
     forceSlowFullUpdate_ = false;
     partialCounter_ = 0;
     setFastFullRefresh(false);

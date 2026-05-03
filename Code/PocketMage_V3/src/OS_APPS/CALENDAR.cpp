@@ -1448,7 +1448,9 @@ void einkHandler_CALENDAR() {
         newState = false;
         EINK().resetDisplay();
         drawCalendarWeek(weekOffsetCount);
-        EINK().forceSlowFullUpdate(true);
+        #if POCKETMAGE_HW_VERSION != 2
+          EINK().forceSlowFullUpdate(true);
+        #endif
         EINK().refresh();
       }
       break;
@@ -1458,7 +1460,9 @@ void einkHandler_CALENDAR() {
         newState = false;
         EINK().resetDisplay();
         drawCalendarMonth(monthOffsetCount);
-        EINK().forceSlowFullUpdate(true);
+        #if POCKETMAGE_HW_VERSION != 2
+          EINK().forceSlowFullUpdate(true);
+        #endif
         EINK().refresh();
       }
       break;
@@ -1498,7 +1502,9 @@ void einkHandler_CALENDAR() {
           case 5: EINK().drawStatusBar("Attach Note on OLED"); break;
         }
 
-        EINK().forceSlowFullUpdate(true);
+        #if POCKETMAGE_HW_VERSION != 2
+          EINK().forceSlowFullUpdate(true);
+        #endif
         EINK().refresh();
       }
       break;
@@ -1530,7 +1536,9 @@ void einkHandler_CALENDAR() {
         display.setCursor(106, 178);
         display.print(newEventNote);
 
-        EINK().forceSlowFullUpdate(true);
+        #if POCKETMAGE_HW_VERSION != 2
+          EINK().forceSlowFullUpdate(true);
+        #endif
         EINK().refresh();
       }
       break;
@@ -1576,7 +1584,9 @@ void einkHandler_CALENDAR() {
           display.print(bottomInfo);
         }
 
-        EINK().forceSlowFullUpdate(true);
+        #if POCKETMAGE_HW_VERSION != 2
+          EINK().forceSlowFullUpdate(true);
+        #endif
         EINK().refresh();
       }
       break;

@@ -1642,13 +1642,38 @@ void editorEinkDisplay(Document& doc, uint16_t currentLineNum) {
 
   display.fillScreen(GxEPD_WHITE); 
   int currentY = 0;
+  int linesDrawn = 0;
 
   for (uint16_t i = topVisibleLine; i < doc.lineCount; i++) {
     bool isSelected = (i == currentLineNum);
     int heightUsed = drawLineEink(doc, i, 0, currentY, isSelected); 
     
     currentY += heightUsed;
+    linesDrawn++;
     if (currentY >= display.height() + 20) break;
+  }
+
+  // Draw TXT Scrollbar (Matching Terminal app style)
+  int maxScroll = doc.lineCount - linesDrawn;
+  if (maxScroll > 0) {
+    int barWidth = 2;
+    int barX = display.width() - barWidth;
+    
+    float visibleRatio = (float)linesDrawn / doc.lineCount;
+    int handleHeight = max((int)(display.height() * visibleRatio), 15);
+    
+    float scrollFraction = (float)topVisibleLine / maxScroll;
+    if (scrollFraction > 1.0f) scrollFraction = 1.0f; // clamp just in case
+    int handleY = scrollFraction * (display.height() - handleHeight);
+
+    // Backdrop for scrollbar
+    display.fillRect(barX-1, 0, barWidth+1, display.height(), GxEPD_WHITE);
+    
+    display.fillRect(barX, handleY, barWidth, handleHeight, GxEPD_BLACK);
+
+    // Ensure bar never visually touches top/bottom edges
+    display.drawFastHLine(barX, display.height()-1, barWidth, GxEPD_WHITE);
+    display.drawFastHLine(barX, 0, barWidth, GxEPD_WHITE);
   }
 }
 
@@ -2045,7 +2070,9 @@ void einkHandler_TXT_NEW() {
     display.setFullWindow();
     display.setTextColor(GxEPD_BLACK);
     editorEinkDisplay(document, currentLineNum);
-    EINK().forceSlowFullUpdate(true);
+    #if POCKETMAGE_HW_VERSION != 2
+      EINK().forceSlowFullUpdate(true);
+    #endif
     EINK().refresh();
   }
 }

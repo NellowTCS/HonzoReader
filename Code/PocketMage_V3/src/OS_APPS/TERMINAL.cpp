@@ -31,11 +31,13 @@ static inline uint8_t mapUnicodeToFontIndex(uint16_t unicode) {
   return 0x7F; // Replacement char
 }
 
-static void printUTF8ToEink(const String& s) {
+static void printUTF8ToEink(const String& s, int maxChars = 9999) {
   uint16_t i = 0;
-  while (i < s.length()) {
+  int charCount = 0;
+  while (i < s.length() && charCount < maxChars) {
     uint16_t unicode = decodeUTF8(s.c_str(), &i, s.length());
     display.write(mapUnicodeToFontIndex(unicode));
+    charCount++;
   }
 }
 
@@ -48,6 +50,10 @@ static std::vector<String> terminalOutputs;
 static String currentDir = "/";
 static String terminalCommand = "";
 static ulong termScrollIndex = 0;
+static bool termLargeFont = true;
+static int termLinesPerPage = 14;
+static int termMaxLineLen = 28;
+static bool termDarkTheme = true;
 
 // Potion
 static String editFile = "";
@@ -131,7 +137,11 @@ void terminalScrollPreview() {
     }
 
     u8g2.setFont(u8g2_font_5x7_tf);
-    u8g2.drawUTF8(6, y, terminalOutputs[i].c_str());
+    
+    // Truncate preview for OLED
+    String dispStr = terminalOutputs[i];
+    if (dispStr.length() > 21) dispStr = dispStr.substring(0, 21);
+    u8g2.drawUTF8(6, y, dispStr.c_str());
 
     y += 8;
   }
@@ -253,27 +263,32 @@ void potionInit() {
 #pragma region TERMINAL
 void updateTerminalDisp() {
   newState = false;
-  display.fillRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
+  uint16_t bgColor = termDarkTheme ? GxEPD_BLACK : GxEPD_WHITE;
+  uint16_t fgColor = termDarkTheme ? GxEPD_WHITE : GxEPD_BLACK;
+
+  display.fillRect(0, 0, display.width(), display.height(), bgColor);
 
   int maxScroll = 0;
-  if (terminalOutputs.size() > 14) {
-    maxScroll = (int)(terminalOutputs.size() - 14);
+  if (terminalOutputs.size() > termLinesPerPage) {
+    maxScroll = (int)(terminalOutputs.size() - termLinesPerPage);
   }
   
   if (termScrollIndex > (ulong)maxScroll) termScrollIndex = maxScroll;
 
-  int y = 14;
+  int y = termLargeFont ? 14 : 10;
+  int yStep = termLargeFont ? 16 : 10;
   int startIdx = (int)termScrollIndex;
-  int endIdx = startIdx + 14;
+  int endIdx = startIdx + termLinesPerPage;
   if (endIdx > (int)terminalOutputs.size()) endIdx = (int)terminalOutputs.size();
 
   for (int i = startIdx; i < endIdx; i++) {
     const String& s = terminalOutputs[i];
-    display.setTextColor(GxEPD_WHITE);
-    display.setFont(&FreeMonoBold9pt7b);
+    display.setTextColor(fgColor);
+    if (termLargeFont) display.setFont(&FreeMonoBold9pt7b);
+    else display.setFont(&Font5x7Fixed);
     display.setCursor(5, y);
-    printUTF8ToEink(s);
-    y += 16;
+    printUTF8ToEink(s, termMaxLineLen); // Use the length limiter inside our renderer
+    y += yStep;
   }
 
   // Draw Terminal Scrollbar
@@ -281,19 +296,17 @@ void updateTerminalDisp() {
     int barWidth = 3;
     int barX = display.width() - barWidth - 1;
     
-    //display.drawFastVLine(barX + (barWidth / 2), 0, display.height(), GxEPD_WHITE);
-    
-    float visibleRatio = 14.0 / terminalOutputs.size();
+    float visibleRatio = (float)termLinesPerPage / terminalOutputs.size();
     int handleHeight = max((int)(display.height() * visibleRatio), 15);
     
     float scrollFraction = (float)termScrollIndex / maxScroll;
     int handleY = scrollFraction * (display.height() - handleHeight);
     
-    display.fillRect(barX, handleY, barWidth, handleHeight, GxEPD_WHITE);
+    display.fillRect(barX, handleY, barWidth, handleHeight, fgColor);
 
     // Ensure bar never visually touches top/bottom edges
-    display.drawFastHLine(barX, display.height()-1,barWidth, GxEPD_BLACK);
-    display.drawFastHLine(barX, 0,barWidth, GxEPD_BLACK);
+    display.drawFastHLine(barX, display.height()-1,barWidth, bgColor);
+    display.drawFastHLine(barX, 0,barWidth, bgColor);
   }
 
   display.setTextColor(GxEPD_BLACK);
@@ -332,8 +345,6 @@ void funcSelect(String command) {
   String returnText = "";
 
   String totalMsg = currentDir + ">" + command;
-  if (totalMsg.length() > 28)
-    totalMsg = totalMsg.substring(0, 28);
   terminalOutputs.push_back(totalMsg);
 
   command.toLowerCase();
@@ -355,21 +366,24 @@ void funcSelect(String command) {
   // Help
   else if (command == "help") {
     terminalOutputs.push_back("Available commands:");
-    terminalOutputs.push_back("ls                 List dir");
-    terminalOutputs.push_back("cd <dir>         Change dir");
-    terminalOutputs.push_back("rm <file>       Remove file");
-    terminalOutputs.push_back("rm -r <dir>      Remove dir");
-    terminalOutputs.push_back("cp <src> <dest>   Copy file");
-    terminalOutputs.push_back("mv <src> <dest>   Mv/rename");
-    terminalOutputs.push_back("touch <file>    Create file");
-    terminalOutputs.push_back("clear        Clear terminal");
-    terminalOutputs.push_back("txt <file>      Open in TXT");
-    terminalOutputs.push_back("potion/pot <file> Edit prgm");
-    terminalOutputs.push_back("brew <file>        Run prgm");
-    terminalOutputs.push_back("pot link <file> <alias>");
-    terminalOutputs.push_back("pot unlink <alias>");
+    terminalOutputs.push_back("ls                  List dir");
+    terminalOutputs.push_back("cd <dir>          Change dir");
+    terminalOutputs.push_back("rm <file>        Remove file");
+    terminalOutputs.push_back("rm -r <dir>       Remove dir");
+    terminalOutputs.push_back("cp <src> <dest>    Copy file");
+    terminalOutputs.push_back("mv <src> <dest>    Mv/rename");
+    terminalOutputs.push_back("touch <file>     Create file");
+    terminalOutputs.push_back("mkdir <name>   Create folder");
+    terminalOutputs.push_back("clear         Clear terminal");
+    terminalOutputs.push_back("txt <file>       Open in TXT");
+    terminalOutputs.push_back("potion/pot <file>  Edit prgm");
+    terminalOutputs.push_back("brew <file>         Run prgm");
+    terminalOutputs.push_back("pot link <file> <alias> link");
+    terminalOutputs.push_back("pot unlink <alias>    unlink");
+    terminalOutputs.push_back("setfont <l/s>  Set font size");
+    terminalOutputs.push_back("theme <light/dark> Set theme");
 
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
 
@@ -411,7 +425,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -447,8 +461,7 @@ void funcSelect(String command) {
             lineOutput += " * ";
             lineOutput += String(file.size()) + "b";
           }
-          if (lineOutput.length() > 28)
-            lineOutput = lineOutput.substring(0, 28);
+
           terminalOutputs.push_back(lineOutput);
 
           lineOutput = "";
@@ -466,7 +479,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -499,7 +512,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -538,7 +551,7 @@ void funcSelect(String command) {
       OLED().sysMessage(returnText,1000);
     }
 
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -583,7 +596,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -635,7 +648,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -690,7 +703,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -728,7 +741,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -774,7 +787,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -827,7 +840,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText, 1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -858,7 +871,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText, 1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -913,7 +926,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -952,7 +965,7 @@ void funcSelect(String command) {
           }
 
           if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
-          termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+          termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
           return;
         }
       }
@@ -964,7 +977,73 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText,1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
+    newState = true;
+    return;
+  }
+
+  // Set font
+  else if (command.startsWith("setfont ")) {
+    pocketmage::setCpuSpeed(240);
+    String arg = command.substring(8);
+    arg.trim();
+    if (arg == "l") {
+      termLargeFont = true;
+      termLinesPerPage = 14;
+      termMaxLineLen = 28;
+      returnText = "Font set to Large";
+    } else if (arg == "s") {
+      termLargeFont = false;
+      termLinesPerPage = 23; 
+      termMaxLineLen = 52;
+      returnText = "Font set to Small";
+    } else {
+      returnText = "Usage: setfont <l/s>";
+    }
+
+    if (returnText.startsWith("Font")) {
+      prefs.begin("PocketMage", false);
+      prefs.putBool("termLargeFont", termLargeFont);
+      prefs.end();
+    }
+
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (returnText != "") {
+      terminalOutputs.push_back(returnText);
+      OLED().sysMessage(returnText, 1000);
+    }
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
+    newState = true;
+    return;
+  }
+
+  // Theme
+  else if (command.startsWith("theme ")) {
+    pocketmage::setCpuSpeed(240);
+    String arg = command.substring(6);
+    arg.trim();
+    if (arg == "light" || arg == "l") {
+      termDarkTheme = false;
+      returnText = "Theme set to Light";
+    } else if (arg == "dark" || arg == "d") {
+      termDarkTheme = true;
+      returnText = "Theme set to Dark";
+    } else {
+      returnText = "Usage: theme <light/dark>";
+    }
+
+    if (returnText.startsWith("Theme")) {
+      prefs.begin("PocketMage", false);
+      prefs.putBool("termDarkTheme", termDarkTheme);
+      prefs.end();
+    }
+
+    if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
+    if (returnText != "") {
+      terminalOutputs.push_back(returnText);
+      OLED().sysMessage(returnText, 1000);
+    }
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -990,7 +1069,7 @@ void funcSelect(String command) {
         returnText = "Failed to read linked file";
       }
       if (SAVE_POWER) pocketmage::setCpuSpeed(POWER_SAVE_FREQ);
-      termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+      termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
       return;
     }
 
@@ -999,7 +1078,7 @@ void funcSelect(String command) {
       terminalOutputs.push_back(returnText);
       OLED().sysMessage(returnText, 1000);
     }
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -1008,7 +1087,7 @@ void funcSelect(String command) {
   returnText = commandSelect(command);
   if (returnText != "") {
     terminalOutputs.push_back(returnText);
-    termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+    termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
     newState = true;
     return;
   }
@@ -1030,7 +1109,7 @@ void wr_print(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* u
   const char* s = argv[0].asString(buf, 1024);
 
   terminalOutputs.push_back(s);
-  termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+  termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
 }
 
 void wr_prompt(WRContext* c, const WRValue* argv, int argn, WRValue& ret, void* usr) {
@@ -1417,8 +1496,7 @@ void compileWrench(const char* wrenchCode) {
           len--;
         }
 
-        int outLen = (len > 29) ? 29 : len;
-        terminalOutputs.push_back(String(lineStart).substring(0, outLen));
+        terminalOutputs.push_back(String(lineStart).substring(0, len));
 
         lineStart = p + 1;
       }
@@ -1427,14 +1505,13 @@ void compileWrench(const char* wrenchCode) {
 
     if (lineStart != p) {
       int len = p - lineStart;
-      int outLen = (len > 29) ? 29 : len;
-      terminalOutputs.push_back(String(lineStart).substring(0, outLen));
+      terminalOutputs.push_back(String(lineStart).substring(0, len));
     }
   }
 
   wr_destroyState(w);
 
-  termScrollIndex = terminalOutputs.size() > 14 ? terminalOutputs.size() - 14 : 0;
+  termScrollIndex = terminalOutputs.size() > termLinesPerPage ? terminalOutputs.size() - termLinesPerPage : 0;
   newState = true;
 }
 
@@ -1446,8 +1523,21 @@ void TERMINAL_INIT() {
   potionLines.push_back("");
   terminalCommand = "";
   
-  if (terminalOutputs.size() > 14) {
-      termScrollIndex = (ulong)(terminalOutputs.size() - 14);
+  prefs.begin("PocketMage", true);
+  termLargeFont = prefs.getBool("termLargeFont", true);
+  termDarkTheme = prefs.getBool("termDarkTheme", true);
+  prefs.end();
+
+  if (termLargeFont) {
+    termLinesPerPage = 14;
+    termMaxLineLen = 28;
+  } else {
+    termLinesPerPage = 23;
+    termMaxLineLen = 52;
+  }
+  
+  if (terminalOutputs.size() > termLinesPerPage) {
+      termScrollIndex = (ulong)(terminalOutputs.size() - termLinesPerPage);
   } else {
       termScrollIndex = 0;
   }
@@ -1476,8 +1566,8 @@ void processKB_TERMINAL() {
       }
 
       int maxScroll = 0;
-      if (terminalOutputs.size() > 14) {
-          maxScroll = (int)(terminalOutputs.size() - 14);
+      if (terminalOutputs.size() > termLinesPerPage) {
+          maxScroll = (int)(terminalOutputs.size() - termLinesPerPage);
       }
 
       ulong maxS = (ulong)maxScroll;
@@ -1501,8 +1591,8 @@ void processKB_TERMINAL() {
             funcSelect(terminalCommand);
             terminalCommand = "";
             
-            if (terminalOutputs.size() > 14) {
-                termScrollIndex = (ulong)(terminalOutputs.size() - 14);
+            if (terminalOutputs.size() > termLinesPerPage) {
+                termScrollIndex = (ulong)(terminalOutputs.size() - termLinesPerPage);
             } else {
                 termScrollIndex = 0;
             }
@@ -1776,7 +1866,9 @@ void einkHandler_TERMINAL() {
     case POTION:
       if (newState) {
         newState = false;
-        display.fillRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
+        uint16_t bgColor = termDarkTheme ? GxEPD_BLACK : GxEPD_WHITE;
+        uint16_t fgColor = termDarkTheme ? GxEPD_WHITE : GxEPD_BLACK;
+        display.fillRect(0, 0, display.width(), display.height(), bgColor);
 
         if (potionLines.size() < 24) {
           int y = 10;
@@ -1789,10 +1881,10 @@ void einkHandler_TERMINAL() {
             }
 
             if (i == currentPotionLine) {
-              display.fillRect(0, y - 9, display.width(), 11, GxEPD_WHITE);
-              display.setTextColor(GxEPD_BLACK);
+              display.fillRect(0, y - 9, display.width(), 11, fgColor);
+              display.setTextColor(bgColor);
             } else
-              display.setTextColor(GxEPD_WHITE);
+              display.setTextColor(fgColor);
             display.setFont(&Font5x7Fixed);
             display.setCursor(5, y);
             display.print("[" + lineNum + "]");
@@ -1815,10 +1907,10 @@ void einkHandler_TERMINAL() {
               }
 
               if (i == currentPotionLine) {
-                display.fillRect(0, y - 9, display.width(), 11, GxEPD_WHITE);
-                display.setTextColor(GxEPD_BLACK);
+                display.fillRect(0, y - 9, display.width(), 11, fgColor);
+                display.setTextColor(bgColor);
               } else
-                display.setTextColor(GxEPD_WHITE);
+                display.setTextColor(fgColor);
               display.setFont(&Font5x7Fixed);
               display.setCursor(5, y);
               display.print("[" + lineNum + "]");
@@ -1840,10 +1932,10 @@ void einkHandler_TERMINAL() {
               }
 
               if (i == currentPotionLine) {
-                display.fillRect(0, y - 9, display.width(), 11, GxEPD_WHITE);
-                display.setTextColor(GxEPD_BLACK);
+                display.fillRect(0, y - 9, display.width(), 11, fgColor);
+                display.setTextColor(bgColor);
               } else
-                display.setTextColor(GxEPD_WHITE);
+                display.setTextColor(fgColor);
               display.setFont(&Font5x7Fixed);
               display.setCursor(5, y);
               display.print("[" + lineNum + "]");

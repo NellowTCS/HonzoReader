@@ -426,7 +426,9 @@ void einkHandler_LEXICON() {
 
         EINK().drawStatusBar("Type a New Word:");
 
-        EINK().forceSlowFullUpdate(true);
+        #if POCKETMAGE_HW_VERSION != 2
+          EINK().forceSlowFullUpdate(true);
+        #endif
         EINK().refresh();
       }
       break;
