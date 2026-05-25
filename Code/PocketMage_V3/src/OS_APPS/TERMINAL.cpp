@@ -982,6 +982,16 @@ void funcSelect(String command) {
     return;
   }
 
+  // Echo
+  else if (command.startsWith("echo")) {
+    String arg = command.substring(4);
+    arg.trim();
+    terminalOutputs.push_back(arg);
+    OLED().sysMessage(arg, 1000);
+    newState = true;
+    return;
+  }
+
   // Set font
   else if (command.startsWith("setfont ")) {
     pocketmage::setCpuSpeed(240);
