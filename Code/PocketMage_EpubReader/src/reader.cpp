@@ -5,7 +5,7 @@ BookEntry   g_books[32]     = {};
 int         g_bookCount     = 0;
 int         g_selIndex      = 0;
 
-char        g_curBook[64]   = {};
+char        g_curBook[128]  = {};
 uint16_t    g_curChapter    = 0;
 uint16_t    g_curPage       = 0;
 uint16_t    g_chapterCount  = 0;
@@ -17,7 +17,7 @@ size_t      g_plainTextLen  = 0;
 LayoutPage* g_pages         = nullptr;
 uint16_t    g_pageCount     = 0;
 
-TocEntry    g_toc[256]      = {};
+TocEntry    g_toc[64]       = {};
 uint16_t    g_tocCount      = 0;
 uint16_t    g_tocScroll     = 0;
 

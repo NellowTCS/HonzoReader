@@ -5,15 +5,22 @@
 
 #if OTA_APP
 
-// Arduino entry points
+static void appTask(void*) {
+    for (;;) {
+        processKB_APP();
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+        yield();
+    }
+}
+
 void setup() {
     PocketMage_INIT();
+    xTaskCreatePinnedToCore(appTask, "appTask", 32768, NULL, 2, NULL, 0);
     APP_INIT();
 }
 
 void loop() {
-    processKB_APP();
-    vTaskDelay(50 / portTICK_PERIOD_MS);
+    vTaskDelay(pdMS_TO_TICKS(100));
     yield();
 }
 
@@ -83,6 +90,8 @@ void processKB_APP() {
 
 // einkHandler_APP
 void einkHandler_APP() {
+    if (!g_needsRedraw) { updateOLED(); return; }
+    g_needsRedraw = false;
     switch (g_appMode) {
         case MODE_HELP:    help_render();    break;
         case MODE_LIBRARY: library_render(); break;

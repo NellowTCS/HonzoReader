@@ -42,6 +42,8 @@ diplomat_result_void_void EpubExtractor_get_chapter_text(EpubExtractor* self, si
 
 diplomat_result_void_void EpubExtractor_get_chapter_json(EpubExtractor* self, size_t index, DiplomatWriteable* to);
 
+diplomat_result_void_void EpubExtractor_get_single_chapter_json(EpubExtractor* self, size_t index, DiplomatWriteable* to);
+
 diplomat_result_void_void EpubExtractor_get_toc_json(EpubExtractor* self, DiplomatWriteable* to);
 
 diplomat_result_void_void EpubExtractor_get_toc(EpubExtractor* self, DiplomatWriteable* to);

@@ -9,8 +9,8 @@
 // Bookmark save/load
 bool saveBookmark() {
     SD_MMC.mkdir(BMARKS_DIR);
-    char path[96];
-    snprintf(path, sizeof(path), "%s/%.48s.bmark", BMARKS_DIR, g_curBook);
+    char path[256];
+    snprintf(path, sizeof(path), "%s/%s.bmark", BMARKS_DIR, g_curBook);
     // Replace any extension with .bmark
     char* dot = strrchr(path, '.');
     if (dot && dot > strrchr(path, '/')) {
@@ -27,8 +27,8 @@ bool saveBookmark() {
 }
 
 bool loadBookmark(Bookmark* bm) {
-    char path[96];
-    snprintf(path, sizeof(path), "%s/%.48s.bmark", BMARKS_DIR, g_curBook);
+    char path[256];
+    snprintf(path, sizeof(path), "%s/%s.bmark", BMARKS_DIR, g_curBook);
     char* dot = strrchr(path, '.');
     if (dot && dot > strrchr(path, '/')) {
         strcpy(dot, ".bmark");

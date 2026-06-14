@@ -36,7 +36,7 @@ static FontSlot pick_font(uint8_t heading, uint8_t style, bool code) {
     return { &FreeSerif9pt8b, 12 };
 }
 
-// AST flattening
+// AST flattening (iterative, no recursion to save stack)
 struct AstCtx {
     StyledRun* runs;
     int        maxRuns;
@@ -46,96 +46,117 @@ struct AstCtx {
     int        poolUsed;
 };
 
-static void ast_flatten(JsonVariantConst node, AstCtx* ctx,
-                        uint8_t heading, uint8_t style, uint8_t flags, uint16_t indent)
-{
-    if (ctx->runCount >= ctx->maxRuns) return;
-    if (ctx->poolUsed >= ctx->poolCap) return;
+struct FlattenFrame {
+    JsonVariantConst node;
+    uint8_t   heading;
+    uint8_t   style;
+    uint8_t   flags;
+    uint16_t  indent;
+};
 
-    const char* type = node["type"];
+static void ast_flatten(JsonVariantConst root, AstCtx* ctx) {
+    FlattenFrame stack[64];
+    int sp = 0;
+    stack[sp++] = { root, 0, 0, 0, 0 };
 
-    if (strcmp(type, "Text") == 0) {
-        const char* content = node["content"];
-        if (!content || !*content) return;
-        size_t len = strlen(content);
+    while (sp > 0) {
+        FlattenFrame f = stack[--sp];
+        JsonVariantConst node = f.node;
+        uint8_t  heading = f.heading;
+        uint8_t  style   = f.style;
+        uint8_t  flags   = f.flags;
+        uint16_t indent  = f.indent;
 
-        // Skip whitespace-only
-        bool onlySpace = true;
-        for (size_t i = 0; i < len; i++) {
-            if (content[i] != ' ' && content[i] != '\n' && content[i] != '\r' && content[i] != '\t') {
-                onlySpace = false; break;
+        if (ctx->runCount >= ctx->maxRuns) break;
+        if (ctx->poolUsed >= ctx->poolCap) break;
+
+        const char* type = node["type"];
+
+        if (strcmp(type, "Text") == 0) {
+            const char* content = node["content"];
+            if (!content || !*content) continue;
+            size_t len = strlen(content);
+
+            bool onlySpace = true;
+            for (size_t i = 0; i < len; i++) {
+                if (content[i] != ' ' && content[i] != '\n' && content[i] != '\r' && content[i] != '\t') {
+                    onlySpace = false; break;
+                }
             }
-        }
-        if (onlySpace) {
-            // Insert a single space
-            if (ctx->poolUsed + 2 < ctx->poolCap) {
-                ctx->runs[ctx->runCount].text    = &ctx->pool[ctx->poolUsed];
-                ctx->runs[ctx->runCount].len     = 1;
-                ctx->runs[ctx->runCount].font    = style;
-                ctx->runs[ctx->runCount].heading = heading;
-                ctx->runs[ctx->runCount].flags   = flags;
-                ctx->runs[ctx->runCount].indent  = indent;
-                ctx->pool[ctx->poolUsed++] = ' ';
-                ctx->pool[ctx->poolUsed++] = '\0';
-                ctx->runCount++;
+            if (onlySpace) {
+                if (ctx->poolUsed + 2 < ctx->poolCap) {
+                    ctx->runs[ctx->runCount].text    = &ctx->pool[ctx->poolUsed];
+                    ctx->runs[ctx->runCount].len     = 1;
+                    ctx->runs[ctx->runCount].font    = style;
+                    ctx->runs[ctx->runCount].heading = heading;
+                    ctx->runs[ctx->runCount].flags   = flags;
+                    ctx->runs[ctx->runCount].indent  = indent;
+                    ctx->pool[ctx->poolUsed++] = ' ';
+                    ctx->pool[ctx->poolUsed++] = '\0';
+                    ctx->runCount++;
+                }
+                continue;
             }
-            return;
-        }
 
-        int copyLen = min((int)len, ctx->poolCap - ctx->poolUsed - 1);
-        memcpy(&ctx->pool[ctx->poolUsed], content, copyLen);
-        ctx->pool[ctx->poolUsed + copyLen] = '\0';
+            int copyLen = min((int)len, ctx->poolCap - ctx->poolUsed - 1);
+            memcpy(&ctx->pool[ctx->poolUsed], content, copyLen);
+            ctx->pool[ctx->poolUsed + copyLen] = '\0';
 
-        ctx->runs[ctx->runCount].text    = &ctx->pool[ctx->poolUsed];
-        ctx->runs[ctx->runCount].len     = copyLen;
-        ctx->runs[ctx->runCount].font    = style;
-        ctx->runs[ctx->runCount].heading = heading;
-        ctx->runs[ctx->runCount].flags   = flags;
-        ctx->runs[ctx->runCount].indent  = indent;
-        ctx->runCount++;
-        ctx->poolUsed += copyLen + 1;
-        return;
-    }
-
-    if (strcmp(type, "Comment") == 0) return;
-
-    if (strcmp(type, "Element") == 0) {
-        const char* tag = node["tag"];
-        uint8_t  h = heading;
-        uint8_t  s = style;
-        uint8_t  f = flags;
-        uint16_t ind = indent;
-
-        if      (strcmp(tag, "h1") == 0)  h = 1;
-        else if (strcmp(tag, "h2") == 0)  h = 2;
-        else if (strcmp(tag, "h3") == 0)  h = 3;
-        else if (strcmp(tag, "h4") == 0)  h = 4;
-        else if (strcmp(tag, "h5") == 0)  h = 5;
-        else if (strcmp(tag, "h6") == 0)  h = 6;
-        else if (strcmp(tag, "strong") == 0 || strcmp(tag, "b") == 0) s = 1;
-        else if (strcmp(tag, "em") == 0 || strcmp(tag, "i") == 0)     s = (s == 1) ? 3 : 2;
-        else if (strcmp(tag, "code") == 0 || strcmp(tag, "pre") == 0) f |= 1;
-        else if (strcmp(tag, "blockquote") == 0)                       f |= 2;
-        else if (strcmp(tag, "li") == 0)                               f |= 4, ind += 20;
-        else if (strcmp(tag, "ul") == 0 || strcmp(tag, "ol") == 0)    ind += 10;
-        else if (strcmp(tag, "br") == 0) {
-            if (ctx->poolUsed + 2 < ctx->poolCap) {
-                ctx->runs[ctx->runCount].text    = &ctx->pool[ctx->poolUsed];
-                ctx->runs[ctx->runCount].len     = 1;
-                ctx->runs[ctx->runCount].font    = s;
-                ctx->runs[ctx->runCount].heading = h;
-                ctx->runs[ctx->runCount].flags   = f;
-                ctx->runs[ctx->runCount].indent  = ind;
-                ctx->pool[ctx->poolUsed++] = '\n';
-                ctx->pool[ctx->poolUsed++] = '\0';
-                ctx->runCount++;
-            }
-            return;
+            ctx->runs[ctx->runCount].text    = &ctx->pool[ctx->poolUsed];
+            ctx->runs[ctx->runCount].len     = copyLen;
+            ctx->runs[ctx->runCount].font    = style;
+            ctx->runs[ctx->runCount].heading = heading;
+            ctx->runs[ctx->runCount].flags   = flags;
+            ctx->runs[ctx->runCount].indent  = indent;
+            ctx->runCount++;
+            ctx->poolUsed += copyLen + 1;
+            continue;
         }
 
-        JsonArrayConst children = node["children"];
-        for (JsonVariantConst child : children) {
-            ast_flatten(child, ctx, h, s, f, ind);
+        if (strcmp(type, "Comment") == 0) continue;
+
+        if (strcmp(type, "Element") == 0) {
+            const char* tag = node["tag"];
+            uint8_t  h = heading;
+            uint8_t  s = style;
+            uint8_t  f = flags;
+            uint16_t ind = indent;
+
+            if      (strcmp(tag, "h1") == 0)  h = 1;
+            else if (strcmp(tag, "h2") == 0)  h = 2;
+            else if (strcmp(tag, "h3") == 0)  h = 3;
+            else if (strcmp(tag, "h4") == 0)  h = 4;
+            else if (strcmp(tag, "h5") == 0)  h = 5;
+            else if (strcmp(tag, "h6") == 0)  h = 6;
+            else if (strcmp(tag, "strong") == 0 || strcmp(tag, "b") == 0) s = 1;
+            else if (strcmp(tag, "em") == 0 || strcmp(tag, "i") == 0)     s = (s == 1) ? 3 : 2;
+            else if (strcmp(tag, "code") == 0 || strcmp(tag, "pre") == 0) f |= 1;
+            else if (strcmp(tag, "blockquote") == 0)                       f |= 2;
+            else if (strcmp(tag, "li") == 0)                               f |= 4, ind += 20;
+            else if (strcmp(tag, "ul") == 0 || strcmp(tag, "ol") == 0)    ind += 10;
+            else if (strcmp(tag, "br") == 0) {
+                if (ctx->poolUsed + 2 < ctx->poolCap) {
+                    ctx->runs[ctx->runCount].text    = &ctx->pool[ctx->poolUsed];
+                    ctx->runs[ctx->runCount].len     = 1;
+                    ctx->runs[ctx->runCount].font    = s;
+                    ctx->runs[ctx->runCount].heading = h;
+                    ctx->runs[ctx->runCount].flags   = f;
+                    ctx->runs[ctx->runCount].indent  = ind;
+                    ctx->pool[ctx->poolUsed++] = '\n';
+                    ctx->pool[ctx->poolUsed++] = '\0';
+                    ctx->runCount++;
+                }
+                continue;
+            }
+
+            JsonArrayConst children = node["children"];
+            size_t numChildren = children.size();
+            if (numChildren == 0) continue;
+            if (sp + (int)numChildren > 64) numChildren = 64 - sp;
+
+            for (int ci = (int)numChildren - 1; ci >= 0; ci--) {
+                stack[sp++] = { children[(size_t)ci], h, s, f, ind };
+            }
         }
     }
 }
@@ -225,34 +246,67 @@ static void layout_runs(StyledRun* runs, int runCount) {
 
 // Public render API
 void render_chapter(const char* json) {
+    Serial.printf("[render_chapter] json len=%u\n", strlen(json));
     g_pagesInChapter = 0;
     g_pageCount = 0;
 
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
-    if (err) return;
+    Serial.printf("[render_chapter] deserializeJson err=%s\n", err.c_str());
+    if (err) { Serial.printf("[render_chapter] JSON PARSE FAILED\n"); return; }
 
     // Flatten AST (heap-allocated to save DRAM BSS)
     static StyledRun* s_runs = nullptr;
     static char*      s_pool = nullptr;
     if (s_runs) free(s_runs);
     if (s_pool) free(s_pool);
-    s_runs = (StyledRun*)malloc(2048 * sizeof(StyledRun));
-    s_pool = (char*)malloc(49152);
-    if (!s_runs || !s_pool) { g_pagesInChapter = 0; g_pageCount = 1; return; }
-    AstCtx ctx = { s_runs, 2048, 0, s_pool, 49152, 0 };
+    s_runs = (StyledRun*)malloc(1024 * sizeof(StyledRun));
+    s_pool = (char*)malloc(24576);
+    if (!s_runs || !s_pool) { Serial.printf("[render_chapter] MALLOC FAILED for runs/pool\n"); g_pagesInChapter = 0; g_pageCount = 1; return; }
+    Serial.printf("[render_chapter] malloc OK runs=%p pool=%p\n", s_runs, s_pool);
+    AstCtx ctx = { s_runs, 1024, 0, s_pool, 24576, 0 };
 
     JsonVariant ast = doc["ast"];
     if (!ast.isNull()) {
-        ast_flatten(ast, &ctx, 0, 0, 0, 0);
+        ast_flatten(ast, &ctx);
+    } else if (doc["content"].is<const char*>()) {
+        const char* text = doc["content"];
+        size_t text_len = strlen(text);
+        const char* p = text;
+        const char* end = text + text_len;
+        while (p < end && ctx.runCount < ctx.maxRuns) {
+            const char* line_end = p;
+            while (line_end < end && *line_end != '\n') line_end++;
+            const char* trim = line_end;
+            while (trim > p && (trim[-1] == ' ' || trim[-1] == '\t')) trim--;
+            size_t line_len = trim - p;
+            if (line_len > 0) {
+                char* pool_ptr = ctx.pool + ctx.poolUsed;
+                size_t room = ctx.poolCap - ctx.poolUsed;
+                if (line_len > room) break;
+                memcpy(pool_ptr, p, line_len);
+                ctx.poolUsed += line_len;
+                StyledRun* run = &ctx.runs[ctx.runCount];
+                run->text = pool_ptr;
+                run->len = line_len;
+                run->font = 0;
+                run->heading = 0;
+                run->flags = 0;
+                run->indent = 0;
+                ctx.runCount++;
+            }
+            p = line_end + 1;
+        }
     }
 
+    Serial.printf("[render_chapter] running layout with %d runs\n", ctx.runCount);
     // Layout
     layout_runs(s_runs, ctx.runCount);
 
     g_pages     = s_pages;
     g_pageCount = (uint16_t)s_pageCount;
     g_pagesInChapter = g_pageCount;
+    Serial.printf("[render_chapter] done pageCount=%u pagesInChapter=%u\n", g_pageCount, g_pagesInChapter);
     if (g_pageCount == 0) g_pageCount = 1;
 }
 

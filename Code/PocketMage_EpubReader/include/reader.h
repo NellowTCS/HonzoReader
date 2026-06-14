@@ -20,7 +20,7 @@ enum AppMode : uint8_t {
 
 // Book entry
 struct BookEntry {
-    char name[64];
+    char name[128];
 };
 
 // Bookmark
@@ -40,7 +40,7 @@ struct StyledRun {
 };
 
 // Display line
-static constexpr int MAX_RUNS_PER_LINE = 16;
+static constexpr int MAX_RUNS_PER_LINE = 8;
 struct LayoutLine {
     StyledRun runs[MAX_RUNS_PER_LINE];
     uint8_t   runCount;
@@ -49,7 +49,7 @@ struct LayoutLine {
 };
 
 // Page
-static constexpr int MAX_LINES_PER_PAGE = 20;
+static constexpr int MAX_LINES_PER_PAGE = 15;
 struct LayoutPage {
     LayoutLine lines[MAX_LINES_PER_PAGE];
     uint8_t    lineCount;
@@ -61,7 +61,7 @@ extern BookEntry   g_books[32];
 extern int         g_bookCount;
 extern int         g_selIndex;
 
-extern char        g_curBook[64];
+extern char        g_curBook[128];
 extern uint16_t    g_curChapter;
 extern uint16_t    g_curPage;
 extern uint16_t    g_chapterCount;
@@ -83,10 +83,10 @@ extern bool        g_needsRedraw;
 // TOC entry
 struct TocEntry {
     uint16_t index;
-    char     title[128];
+    char     title[64];
 };
 
-extern TocEntry    g_toc[256];
+extern TocEntry    g_toc[64];
 extern uint16_t    g_tocCount;
 extern uint16_t    g_tocScroll;
 
