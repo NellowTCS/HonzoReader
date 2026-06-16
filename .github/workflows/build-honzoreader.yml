@@ -1,4 +1,4 @@
-name: build honzoreader
+name: Build HonzoReader
 
 on:
   workflow_dispatch:
@@ -42,7 +42,7 @@ jobs:
       - name: Install esp toolchain
         run: |
           cargo install espup
-          espup install --targets xtensa-esp32s3-espidf --build-std
+          espup install --targets xtensa-esp32s3-espidf
           echo "$HOME/.rustup/toolchains/esp/bin" >> $GITHUB_PATH
 
       - name: Install just
