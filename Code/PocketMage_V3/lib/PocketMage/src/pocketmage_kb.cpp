@@ -778,15 +778,17 @@ char PocketmageKB::updateKeypress() {
         static bool shift_phys_held = false;
         static bool fn_locked = false;
         static bool shift_locked = false;
+        static bool shift_oneshot = false;
         static unsigned long fn_press_time = 0;
         static unsigned long shift_press_time = 0;
+        static unsigned long shift_release_time = 0;
         static bool fn_used = false;
         static bool shift_used = false;
 
         // Helper to evaluate and set the true global state
         auto sync_and_update_state = [&]() {
             bool eff_fn = fn_phys_held || fn_locked;
-            bool eff_shift = shift_phys_held || shift_locked;
+            bool eff_shift = shift_phys_held || shift_locked || shift_oneshot;
             if (eff_fn && eff_shift) kbState_ = 3;
             else if (eff_fn) kbState_ = 2;
             else if (eff_shift) kbState_ = 1;
@@ -799,9 +801,12 @@ char PocketmageKB::updateKeypress() {
 
           if (baseC == 18) { // FN Key Pressed
             // Reverse-sync: Check if an OS app artificially forced the state
-            fn_locked = (kbState_ == 2 || kbState_ == 3);
-            shift_locked = (kbState_ == 1 || kbState_ == 3);
+            bool app_forced_fn = (kbState_ == 2 || kbState_ == 3) && !fn_locked && !fn_phys_held;
+            if (app_forced_fn) fn_locked = true;
             
+            shift_locked = false;
+            shift_oneshot = false;
+
             fn_phys_held = true;
             fn_press_time = millis();
             fn_used = false;
@@ -810,9 +815,20 @@ char PocketmageKB::updateKeypress() {
             return 0; // Hide from OS app's input loop
           }
           else if (baseC == 17) { // SHIFT Key Pressed
-            fn_locked = (kbState_ == 2 || kbState_ == 3);
-            shift_locked = (kbState_ == 1 || kbState_ == 3);
-            
+            // Reverse-sync: Check if an OS app artificially forced the state, ignoring one-shot states
+            bool app_forced_shift = (kbState_ == 1 || kbState_ == 3) && !shift_locked && !shift_oneshot && !shift_phys_held;
+            if (app_forced_shift) shift_locked = true;
+
+            if (shift_locked) {
+              shift_locked = false; // Disable caps lock if it was active
+              shift_oneshot = false;
+            } else if (shift_oneshot && (millis() - shift_release_time < 400)) {
+              shift_locked = true;  // Double tap -> Caps Lock
+              shift_oneshot = false;
+            } else {
+              shift_oneshot = false; // Clear any old one-shot
+            }
+
             shift_phys_held = true;
             shift_press_time = millis();
             shift_used = false;
@@ -860,7 +876,9 @@ char PocketmageKB::updateKeypress() {
                       u8g2.clearBuffer();
                       u8g2.sendBuffer();
                     }
-                    return (kbState_ == 1 || kbState_ == 3) ? 14 : 9; 
+                    char retChar = (kbState_ == 1 || kbState_ == 3) ? 14 : 9; 
+                    if (shift_oneshot) { shift_oneshot = false; sync_and_update_state(); }
+                    return retChar;
                   } else {
                     u8g2.clearBuffer();
                     u8g2.sendBuffer();
@@ -881,11 +899,18 @@ char PocketmageKB::updateKeypress() {
                         else if (cycleIndex == 11) APPLOADER_INIT();
 #endif
                         // If 0 ("cancel"), do nothing.
-                        if (cycleIndex == 0) return 0;
-                        else return 23; // Return 23 so we can tell the loop to break
+                        if (cycleIndex == 0) {
+                            if (shift_oneshot) { shift_oneshot = false; sync_and_update_state(); }
+                            return 0;
+                        }
+                        else {
+                            if (shift_oneshot) { shift_oneshot = false; sync_and_update_state(); }
+                            return 23; // Return 23 so we can tell the loop to break
+                        }
                     }
                     else if (CurrentAppState == USB_APP) {
                       OLED().sysMessage("Please close USB connection",2000);
+                      if (shift_oneshot) { shift_oneshot = false; sync_and_update_state(); }
                       return 0;
                     }
 
@@ -894,6 +919,7 @@ char PocketmageKB::updateKeypress() {
                     strncpy(utf8Buffer, sel.c_str(), 7);
                     char c = utf8Buffer[0];
                     memmove(utf8Buffer, utf8Buffer + 1, 7);
+                    if (shift_oneshot) { shift_oneshot = false; sync_and_update_state(); }
                     return c; 
                   }
                 } 
@@ -921,6 +947,7 @@ char PocketmageKB::updateKeypress() {
                   static const char* cyc_N[] = {"N", "Ñ"};
                   static const char* cyc_c[] = {"c", "ç"};
                   static const char* cyc_C[] = {"C", "Ç"};
+                  static const char* cyc_period[] = {":)", ":D", ";)", ":P", ":O", ":(", ":|", "<3"};
                   
                   // App Switcher Arrays
                   static const char* cyc_appSwitch[] = {" ", "N", "F", "U", "M", "S", "T", "C", "J", "D", "P", "L"};
@@ -941,6 +968,7 @@ char PocketmageKB::updateKeypress() {
                   else if (nestedBaseC == 'N') { activeCycle = cyc_N; activeCycleLen = 2; }
                   else if (nestedBaseC == 'c') { activeCycle = cyc_c; activeCycleLen = 2; }
                   else if (nestedBaseC == 'C') { activeCycle = cyc_C; activeCycleLen = 2; }
+                  else if (nestedBaseC == '.') { activeCycle = cyc_period; activeCycleLen = 8; }
                   else if (nestedBaseC == 20 || nestedBaseC == 7)  { activeCycle = cyc_appSwitch; activeCycleLen = 12; }
                   else matched = false;
 
@@ -1022,13 +1050,20 @@ char PocketmageKB::updateKeypress() {
           // --- END SPECIAL CHARACTER LOGIC ---
 
           // Return standard character map based on live state
+          char retChar = 0;
           switch (kbState_) {
-            case 0: return keysArray[k/10][k%10];
-            case 1: return keysArraySHFT[k/10][k%10];
-            case 2: return keysArrayFN[k/10][k%10];
-            case 3: return keysArrayFN_SHFT[k/10][k%10];
-            default: return 0;
+            case 0: retChar = keysArray[k/10][k%10]; break;
+            case 1: retChar = keysArraySHFT[k/10][k%10]; break;
+            case 2: retChar = keysArrayFN[k/10][k%10]; break;
+            case 3: retChar = keysArrayFN_SHFT[k/10][k%10]; break;
           }
+          
+          if (shift_oneshot) { 
+            shift_oneshot = false; 
+            sync_and_update_state(); 
+            CLOCK().setPrevTimeMillis(millis() + 1); // Force redraw OS indicators
+          }
+          return retChar;
         } 
         else { // --- KEY RELEASED ---
           if (baseC == 18) { // FN
@@ -1044,7 +1079,12 @@ char PocketmageKB::updateKeypress() {
           else if (baseC == 17) { // SHIFT
             shift_phys_held = false;
             if (!shift_used && (millis() - shift_press_time < 400)) {
-              shift_locked = !shift_locked; 
+              if (!shift_locked) {
+                shift_oneshot = true;
+                shift_release_time = millis();
+              }
+            } else {
+              shift_oneshot = false;
             }
             sync_and_update_state();
             CLOCK().setPrevTimeMillis(millis() + 1); // Force OS redraw
