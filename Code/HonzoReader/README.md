@@ -1,7 +1,7 @@
 # HonzoReader
 
-ePub reader firmware for the PocketMage clamshell device. Reads `.hzo` files
-(See the [Docs](https://nisoku.org/Honzo) for more details on the format.)
+Honzo eBook format reader app for the PocketMage PDA.
+See the [Honzo Docs](https://nisoku.org/Honzo) for more details on the format.
 Supports TOC, bookmarks, chapter/page navigation, and jump-to-page.
 
 ## Build
