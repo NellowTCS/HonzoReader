@@ -115,8 +115,6 @@ void help_render();
 void touch_init();
 void touch_scroll();
 
-void render_chapter_text(const char* text, size_t text_len);
-void render_chapter(const char* json);
 void render_chapter_markup(const char* text, size_t len, uint8_t markup);
 void render_page_to_eink(uint16_t pageIdx);
 void updateOLED();

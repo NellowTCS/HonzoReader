@@ -115,6 +115,10 @@ static void extract_between(HtmlCtx* ctx, struct html_tag* tag) {
 
 static void tag_callback(struct html_tag* tag, void* userdata) {
     HtmlCtx* ctx = (HtmlCtx*)userdata;
+    if (!tag || !tag->name) {
+        // Bad tag, skip
+        return;
+    }
     const char* name = tag->name;
 
     // Extract clean text between tags (no HTML markup) on every tag callback.
