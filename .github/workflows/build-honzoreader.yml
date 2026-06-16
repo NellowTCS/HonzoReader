@@ -1,0 +1,62 @@
+name: build honzoreader
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Code/HonzoReader
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: PlatformIO
+        run: |
+          pip install -U platformio
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: System deps
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev libusb-1.0-0-dev cmake
+
+      - name: Install esp toolchain
+        run: |
+          cargo install espup
+          espup install --targets xtensa-esp32s3-espidf --build-std
+          echo "$HOME/.rustup/toolchains/esp/bin" >> $GITHUB_PATH
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Build
+        run: just build
+
+      - name: Commit HonzoReader.tar if changed
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          file_pattern: Code/HonzoReader/HonzoReader.tar
+          commit_message: "chore: auto-build HonzoReader.tar"
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "github-actions[bot]@users.noreply.github.com"
