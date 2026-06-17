@@ -1,6 +1,6 @@
-[submodule "Code/PocketMage_V3/third_party/Mesh-NOW"]
-	path = Code/PocketMage_V3/third_party/Mesh-NOW
-	url = https://github.com/NellowTCS/Mesh-NOW.git
 [submodule "Code/PocketMage_V3/lib/third_party/U8g2_for_Adafruit_GFX"]
 	path = Code/PocketMage_V3/lib/third_party/U8g2_for_Adafruit_GFX
 	url = https://github.com/NellowTCS/U8g2_for_Adafruit_GFX.git
+[submodule "Code/PocketMage_V3/lib/third_party/Mesh-NOW"]
+	path = Code/PocketMage_V3/lib/third_party/Mesh-NOW
+	url = https://github.com/NellowTCS/Mesh-NOW.git
