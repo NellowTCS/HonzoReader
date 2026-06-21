@@ -1,5 +1,5 @@
 #include "honzo_meta.h"
-#include <cpp/HonzoFileReader.hpp>
+#include <cpp/free_functions.hpp>
 #include <cstring>
 
 static const char* skip_ws(const char* p) {
@@ -115,16 +115,15 @@ bool honzo_extract_meta(const char* file_path,
     if (title && title_max > 0) title[0] = '\0';
     if (author && author_max > 0) author[0] = '\0';
 
-    auto outer = HonzoFileReader::open(std::string_view(file_path), 1);
-    if (!outer.is_ok()) return false;
-    auto inner = std::move(outer).ok();
-    if (!inner || !(*inner).is_ok()) return false;
-    auto file = std::move(*std::move(*inner).ok());
-    if (!file) return false;
-
-    auto result = file->get_meta();
+    auto result = hzo_extract_meta_from_file(std::string_view(file_path), 1);
     if (!result.is_ok()) return false;
-    std::string json = std::move(result).ok().value();
+    auto inner_opt = std::move(result).ok();
+    if (!inner_opt.has_value()) return false;
+    auto inner_result = std::move(*inner_opt);
+    if (!inner_result.is_ok()) return false;
+    auto json_opt = std::move(inner_result).ok();
+    if (!json_opt.has_value()) return false;
+    std::string json = std::move(*json_opt);
 
     return honzo_scan_meta_json(json.c_str(), title, title_max, author, author_max);
 }

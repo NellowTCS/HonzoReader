@@ -2,7 +2,7 @@
 
 AppMode     g_appMode       = MODE_LIBRARY;
 AppMode     g_prevMode      = MODE_LIBRARY;
-BookEntry   g_books[32]     = {};
+BookEntry   g_books[128]    = {};
 int         g_bookCount     = 0;
 int         g_selIndex      = 0;
 

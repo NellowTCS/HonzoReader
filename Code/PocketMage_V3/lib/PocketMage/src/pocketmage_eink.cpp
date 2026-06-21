@@ -16,6 +16,7 @@ TaskHandle_t einkHandlerTaskHandle = NULL; // E-Ink handler task
 
 // Fast full update flag for e-ink
 volatile bool GxEPD2_310_GDEQ031T10::useFastFullUpdate = true;
+volatile bool GxEPD2_310_GDEQ031T10::useBetaRefreshWorkaround = true;
 
 // Initialization of eink display class
 static PocketmageEink pm_eink(display);

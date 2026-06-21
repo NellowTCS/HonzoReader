@@ -14,7 +14,7 @@ static constexpr int16_t MARGIN_X = 8;
 static constexpr int16_t MARGIN_Y = 36;
 static constexpr int16_t USABLE_W = 304;
 static constexpr int16_t USABLE_H = 230;
-static constexpr int16_t PAGE_LINE_H = 13;
+static constexpr int16_t PAGE_LINE_H = 16;
 static constexpr int MAX_PAGES = 32;
 static constexpr int MAX_RUNS_TOTAL = 2048;
 static constexpr int POOL_SIZE = 32768;
@@ -26,15 +26,15 @@ struct FontSlot {
 };
 
 static FontSlot pick_font(uint8_t heading, uint8_t style, bool code) {
-    if (code)                       return { u8g2_font_courB12_tf, 10 };
+    if (code)                       return { u8g2_font_courB14_tf, 12 };
     if (heading == 1)               return { u8g2_font_ncenB24_tf, 18 };
     if (heading == 2)               return { u8g2_font_ncenB18_tf, 14 };
     if (heading >= 3)               return { u8g2_font_ncenB14_tf, 12 };
-    if (style == 0)                 return { u8g2_font_ncenR12_tf, 10 };
-    if (style == 1)                 return { u8g2_font_ncenB12_tf, 10 };
-    if (style == 2)                 return { u8g2_font_ncenR12_tf, 10 };
-    if (style >= 3)                 return { u8g2_font_ncenB12_tf, 10 };
-    return { u8g2_font_ncenR12_tf, 10 };
+    if (style == 0)                 return { u8g2_font_ncenR14_tf, 12 };
+    if (style == 1)                 return { u8g2_font_ncenB14_tf, 12 };
+    if (style == 2)                 return { u8g2_font_ncenR14_tf, 12 };
+    if (style >= 3)                 return { u8g2_font_ncenB14_tf, 12 };
+    return { u8g2_font_ncenR14_tf, 12 };
 }
 
 // AST FLATTENING
@@ -537,7 +537,7 @@ void render_page_to_eink(uint16_t pageIdx) {
     display.fillScreen(GxEPD_WHITE);
 
     if (!g_pages || g_pageCount == 0) {
-        u8g2Fonts.setFont(u8g2_font_ncenR12_tf);
+        u8g2Fonts.setFont(u8g2_font_ncenR14_tf);
         u8g2Fonts.setFontMode(1);
         u8g2Fonts.setForegroundColor(GxEPD_BLACK);
         u8g2Fonts.drawUTF8(10, 60, "No content");

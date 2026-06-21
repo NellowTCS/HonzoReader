@@ -61,7 +61,7 @@ struct LayoutPage {
 // App globals
 extern AppMode     g_appMode;
 extern AppMode     g_prevMode;
-extern BookEntry   g_books[32];
+extern BookEntry   g_books[128];
 extern int         g_bookCount;
 extern int         g_selIndex;
 

@@ -119,7 +119,7 @@ void library_init() {
     if (!dir || !dir.isDirectory()) return;
 
     File entry;
-    while ((entry = dir.openNextFile()) && g_bookCount < 32) {
+    while ((entry = dir.openNextFile()) && g_bookCount < 128) {
         if (!entry.isDirectory()) {
             const char* name = entry.name();
             // Skip macOS Apple Double metacache
